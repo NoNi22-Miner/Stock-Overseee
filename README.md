@@ -5,6 +5,10 @@ Android app (Expo / React Native) for tracking stock across multiple locations, 
 
 ## Features
 
+- **Home dashboard** (first screen, side-panel navigation): this month's movement count, items moved,
+  low-stock count, **Top 5 most moving** and **Top 5 least moving** items (by quantity or by number of
+  movements), and a daily chart for every item that moved. Stats reset each calendar month; earlier
+  months can be browsed. Stock counts (Adjust) are not counted as movement.
 - **Locations**: WRH and TOKO are set up by default. Add more (e.g. `TOKO2`) under *More*.
 - **Scan**: choose *Stock In*, *Stock Out* or *Transfer*, pick the location(s), then scan with the
   camera or type the barcode (USB/Bluetooth scanners that "type + Enter" also work).
