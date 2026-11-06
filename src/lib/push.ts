@@ -7,14 +7,15 @@ import { supabase } from './supabase';
 let registeredToken: string | null = null;
 
 // Show notifications that arrive while the app is open, too.
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+if (Platform.OS !== 'web')
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
 
 /**
  * Asks for permission (Android 13+), creates the channel and registers this phone for the
@@ -48,6 +49,7 @@ export async function registerForPush(): Promise<boolean> {
 
 /** Keep the server's copy of the token current if Firebase rotates it. */
 export function watchPushToken() {
+  if (Platform.OS === 'web') return () => {};
   const sub = Notifications.addPushTokenListener(({ data }) => {
     if (typeof data === 'string' && data && data !== registeredToken) {
       registeredToken = data;

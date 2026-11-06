@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
+import { cacheGet, cacheSet, isNetworkError, setOfflineScope } from './offline';
 import { registerForPush, unregisterPush, watchPushToken } from './push';
 import type { Role } from './roles';
 import { supabase } from './supabase';
@@ -72,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const userId = session?.user.id ?? null;
 
   const reloadProfile = useCallback(async () => {
+    setOfflineScope(userId);
     if (!userId) {
       setProfile(null);
       return;
@@ -84,19 +86,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       )
       .eq('id', userId)
       .maybeSingle();
+    // Offline: use the copy saved on this phone at the last sign-in.
+    if (error && isNetworkError(error)) {
+      const copy = await cacheGet<{ profile: Profile; myLocations: string[] }>('me');
+      if (copy) {
+        setProfile(copy.value.profile);
+        setMyLocations(copy.value.myLocations);
+        setLoadedFor(userId);
+        return;
+      }
+    }
     if (error) setProfileError(error.message);
     const p = (data as Profile | null) ?? null;
+    let ids: string[] = [];
     if (p?.role && p.is_active) {
-      const { data: ids } = await supabase.rpc('my_location_ids');
-      setMyLocations(
-        ((ids ?? []) as (string | { my_location_ids: string })[]).map((r) =>
-          typeof r === 'string' ? r : r.my_location_ids,
-        ),
+      const { data: rows } = await supabase.rpc('my_location_ids');
+      ids = ((rows ?? []) as (string | { my_location_ids: string })[]).map((r) =>
+        typeof r === 'string' ? r : r.my_location_ids,
       );
-    } else {
-      setMyLocations([]);
     }
+    setMyLocations(ids);
     setProfile(p);
+    if (p) cacheSet('me', { profile: p, myLocations: ids });
     setLoadedFor(userId);
   }, [userId]);
 

@@ -385,3 +385,8 @@ export async function setNotifyChanges(on: boolean) {
   const { error } = await supabase.rpc('set_my_notify_changes', { p_on: on });
   if (error) throw new Error(error.message);
 }
+
+/** All stock rows the member may see (every product × their locations), for the offline copy. */
+export async function listMyStock(): Promise<StockRow[]> {
+  return check(await supabase.from('stock_overview').select(STOCK_COLS).limit(10000)).map(normalizeStock);
+}

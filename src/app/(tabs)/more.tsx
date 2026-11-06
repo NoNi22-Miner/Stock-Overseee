@@ -12,6 +12,7 @@ import {
   setNotifyChanges,
 } from '../../lib/api';
 import { useAuth, useRole } from '../../lib/auth';
+import { useQueue } from '../../lib/offline';
 import { can, ROLE_LABEL } from '../../lib/roles';
 import { supabase } from '../../lib/supabase';
 import { colors } from '../../lib/theme';
@@ -25,6 +26,7 @@ const KINDS: { kind: LocationKind; label: string }[] = [
 
 export default function MoreScreen() {
   const { profile, signOut, reloadProfile } = useAuth();
+  const queue = useQueue();
   const [notifyChanges, setNotifyChangesState] = useState(profile?.notify_changes ?? true);
   const role = useRole();
   const manage = can.manageLocations(role);
@@ -174,7 +176,23 @@ export default function MoreScreen() {
             : 'Signs in with email'}
           {role ? `  ·  ${ROLE_LABEL[role]}` : ''}
         </Text>
-        <Button title="Sign out" variant="outline" color={colors.out} onPress={signOut} />
+        <Button
+          title="Sign out"
+          variant="outline"
+          color={colors.out}
+          onPress={() => {
+            const waiting = queue.filter((q) => q.status === 'pending').length;
+            if (!waiting) return signOut();
+            Alert.alert(
+              `${waiting} scan${waiting > 1 ? 's' : ''} not synced yet`,
+              'They stay on this phone and are sent the next time you sign in here.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Sign out', style: 'destructive', onPress: signOut },
+              ],
+            );
+          }}
+        />
       </Card>
 
       <Text style={[styles.title, { marginTop: 12 }]}>Notifications</Text>

@@ -54,6 +54,7 @@ export type MovementRow = {
   actor_name: string | null;
   transfer_id: string | null;
   detail: 'receive' | 'return' | 'late' | null;
+  scanned_at: string | null;
 };
 
 export type TransferStatus = 'in_transit' | 'short' | 'done';

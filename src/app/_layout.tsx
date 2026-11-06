@@ -2,13 +2,13 @@ import * as Notifications from 'expo-notifications';
 import { router, Stack } from 'expo-router';
 import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Platform, View } from 'react-native';
 import { AuthProvider, useAuth } from '../lib/auth';
 import { routeForNotification } from '../lib/push';
 import { colors } from '../lib/theme';
 
 /** Opens the transfer / product a tapped phone notification is about. */
-function useNotificationTaps(ready: boolean) {
+function NotificationTaps({ ready }: { ready: boolean }) {
   const last = Notifications.useLastNotificationResponse();
   useEffect(() => {
     if (!ready || !last) return;
@@ -16,15 +16,20 @@ function useNotificationTaps(ready: boolean) {
     if (route) router.push(route as never);
     Notifications.clearLastNotificationResponse();
   }, [ready, last]);
+  return null;
 }
 
 function RootStack() {
   const { session, profile, loading } = useAuth();
-  useNotificationTaps(!loading && !!session && !!profile?.role && !!profile?.is_active);
+  // Phone notifications exist on Android / iOS only.
+  const taps = Platform.OS !== 'web' && (
+    <NotificationTaps ready={!loading && !!session && !!profile?.role && !!profile?.is_active} />
+  );
 
   if (loading) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}>
+        {taps}
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
@@ -36,25 +41,29 @@ function RootStack() {
   const needsTeam = signedIn && !!profile && !profile.role && !profile.team_id;
 
   return (
-    <Stack screenOptions={{ headerTintColor: colors.primary }}>
-      <Stack.Protected guard={hasAccess}>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="product/[id]" options={{ title: 'Product' }} />
-        <Stack.Screen name="user/[id]" options={{ title: 'Account' }} />
-        <Stack.Screen name="categories" options={{ title: 'Categories' }} />
-        <Stack.Screen name="transfer/[id]" options={{ title: 'Transfer' }} />
-      </Stack.Protected>
-      <Stack.Protected guard={needsTeam}>
-        <Stack.Screen name="create-team" options={{ headerShown: false }} />
-      </Stack.Protected>
-      <Stack.Protected guard={signedIn && !hasAccess && !needsTeam}>
-        <Stack.Screen name="no-access" options={{ headerShown: false }} />
-      </Stack.Protected>
-      <Stack.Protected guard={!signedIn}>
-        <Stack.Screen name="login" options={{ headerShown: false }} />
-        <Stack.Screen name="signup" options={{ headerShown: false }} />
-      </Stack.Protected>
-    </Stack>
+    <>
+      {taps}
+      <Stack screenOptions={{ headerTintColor: colors.primary }}>
+        <Stack.Protected guard={hasAccess}>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="product/[id]" options={{ title: 'Product' }} />
+          <Stack.Screen name="user/[id]" options={{ title: 'Account' }} />
+          <Stack.Screen name="categories" options={{ title: 'Categories' }} />
+          <Stack.Screen name="transfer/[id]" options={{ title: 'Transfer' }} />
+          <Stack.Screen name="queue" options={{ title: 'Waiting to sync' }} />
+        </Stack.Protected>
+        <Stack.Protected guard={needsTeam}>
+          <Stack.Screen name="create-team" options={{ headerShown: false }} />
+        </Stack.Protected>
+        <Stack.Protected guard={signedIn && !hasAccess && !needsTeam}>
+          <Stack.Screen name="no-access" options={{ headerShown: false }} />
+        </Stack.Protected>
+        <Stack.Protected guard={!signedIn}>
+          <Stack.Screen name="login" options={{ headerShown: false }} />
+          <Stack.Screen name="signup" options={{ headerShown: false }} />
+        </Stack.Protected>
+      </Stack>
+    </>
   );
 }
 

@@ -80,20 +80,31 @@ Nobody is notified about their own action.
 - ✅ **Phone push notifications**, which also arrive when the app is closed. The app and server are
   ready; they start working after the one-time Firebase setup in [PUSH_SETUP.md](PUSH_SETUP.md).
 
-## 7. Working without internet (🔨)
+## 7. Working without internet (✅)
 
-- **First login needs internet.** After that the session stays on the device.
-- The app keeps a **local copy** of products, locations and last-known stock, so scanning and lookups
-  work offline.
-- **In, Out and Transfer** made offline go into a **queue** on the device, marked "Waiting to sync".
-  They are sent in order as soon as the connection is back.
-- Each queued scan has a unique ID, so a retry can never be counted twice.
-- **If a scan can't be applied** when it syncs (e.g. two people took the last item), it is not forced
-  through. It shows as **"Not synced: not enough stock"**, so the user can change the quantity or
-  discard it.
-- **Online only:** Adjust (a count must be applied against current stock), adding products, account and
-  team settings, and exports.
-- History shows the **scan time** (when it happened on the device), plus the sync time when they differ.
+- **First login needs internet.** After that the account works offline on that phone.
+- The phone keeps a **copy** of products, locations and stock (refreshed whenever online), so scanning,
+  word matching and stock lookups work offline.
+- **In, Out and Transfer** made offline (or when the connection drops mid-send) are saved in a
+  **queue** on the phone and sent in order automatically: on reconnect, every 30 s, or with **Send now**.
+- Each queued scan has a unique ID, so a retry is never counted twice (`record_movement_sync`).
+- If the server refuses one when it syncs (e.g. not enough stock), it shows as **"Not synced: …"** on
+  the **Waiting to sync** screen, where the quantity can be corrected and retried, or the scan discarded.
+- **Online only:** Adjust (a count must be checked against current stock), adding products, receiving
+  transfers, account and team settings.
+- History shows the **scan time**, marked "(scanned offline)" when it synced later. The dashboard counts
+  it on the day it was scanned.
+
+## 7b. Scanning words (✅)
+
+Many items have no barcode, only a printed name. The camera has two modes:
+- **Barcode**: reads a barcode or QR code.
+- **Words**: takes a photo of the label and reads the text on the phone (Google ML Kit, works
+  offline). The app ranks products by how closely their **name or code** matches, tolerating OCR
+  mistakes, extra words and different word order; **sizes must agree** (30mm ≠ 20mm, 1/2" ≠ 3/4").
+  A clear best match is picked automatically, with "Not this one?" alternatives. Otherwise the closest
+  matches are listed to choose from.
+- Typing a name in the scan box uses the same matching.
 
 ## 8. Export (🔨)
 
@@ -130,7 +141,8 @@ English and Bahasa Indonesia. The app follows the phone's language; it can be ch
 ## 12. Build order
 
 1. ✅ Categories, location access, transfers in transit, in-app notifications.
-1. **Phone push**: finish the Firebase setup ([PUSH_SETUP.md](PUSH_SETUP.md)), then a test APK.
+1. ✅ Phone push notifications.
+1. ✅ Offline scanning and word scanning.
 2. **Offline queue** (local copy, queue, sync, failed-scan handling).
 3. **Excel / PDF export.**
 4. **Bahasa Indonesia.**
@@ -146,7 +158,7 @@ English and Bahasa Indonesia. The app follows the phone's language; it can be ch
 - `notifications` — per-person inbox; `push_tokens` — registered phones.
 - `locations`, `products` (with `category_id`), `categories` — all per team.
 - `stock_levels` — quantity per product per location.
-- `movements` — log of In / Out / Transfer / Adjust with who did it. 🔨 + `client_id` (offline
-  de-duplication) and `scanned_at`.
+- `movements` — log of In / Out / Transfer / Adjust with who did it, and `scanned_at`;
+  `sync_receipts` — offline scans already recorded (no double counting).
 - Functions: `record_movement`, `record_adjustment`, `create_team`, `resolve_login`, `movement_daily`.
   Edge Function `manage-users`.

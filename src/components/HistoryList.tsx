@@ -29,7 +29,10 @@ export function HistoryItem({ item, showProduct = true }: { item: MovementRow; s
       </View>
       {showProduct && <Text style={styles.title}>{item.product_name}</Text>}
       <Text style={styles.muted}>
-        {new Date(item.created_at).toLocaleString()}
+        {new Date(item.scanned_at ?? item.created_at).toLocaleString()}
+        {item.scanned_at && new Date(item.created_at).getTime() - new Date(item.scanned_at).getTime() > 60_000
+          ? ' (scanned offline)'
+          : ''}
         {item.actor_name ? `  ·  by ${item.actor_name}` : ''}
         {item.note ? `  ·  ${item.note}` : ''}
       </Text>

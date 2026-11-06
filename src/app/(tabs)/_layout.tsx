@@ -5,6 +5,7 @@ import { useWindowDimensions, type ColorValue } from 'react-native';
 import { useRole } from '../../lib/auth';
 import { can } from '../../lib/roles';
 import { colors } from '../../lib/theme';
+import { useAutoSync } from '../../lib/offline';
 import { UnreadProvider, useUnread } from '../../lib/unread';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
@@ -25,6 +26,7 @@ export default function TabsLayout() {
 }
 
 function SideTabs() {
+  useAutoSync(); // send offline scans whenever possible
   const role = useRole();
   const { count } = useUnread();
   const { width } = useWindowDimensions();
