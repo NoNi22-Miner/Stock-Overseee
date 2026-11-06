@@ -26,6 +26,7 @@ function RootStack() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="product/[id]" options={{ title: 'Product' }} />
         <Stack.Screen name="user/[id]" options={{ title: 'Account' }} />
+        <Stack.Screen name="categories" options={{ title: 'Categories' }} />
       </Stack.Protected>
       <Stack.Protected guard={needsTeam}>
         <Stack.Screen name="create-team" options={{ headerShown: false }} />

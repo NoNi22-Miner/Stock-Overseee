@@ -1,14 +1,14 @@
-import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, Switch, Text, View } from 'react-native';
 import { BarcodeScanner } from '../../components/BarcodeScanner';
 import { HistoryItem } from '../../components/HistoryList';
-import { Button, Card, Field, styles } from '../../components/ui';
-import { formatQty, getProduct, listHistory, saveProduct, stockForProduct } from '../../lib/api';
+import { Button, Card, Chip, Field, styles } from '../../components/ui';
+import { formatQty, getProduct, listCategories, listHistory, saveProduct, stockForProduct } from '../../lib/api';
 import { useRole } from '../../lib/auth';
 import { can } from '../../lib/roles';
 import { colors } from '../../lib/theme';
-import type { MovementRow, StockRow } from '../../lib/types';
+import type { Category, MovementRow, StockRow } from '../../lib/types';
 
 export default function ProductScreen() {
   const params = useLocalSearchParams<{ id: string; barcode?: string }>();
@@ -21,10 +21,21 @@ export default function ProductScreen() {
   const [unit, setUnit] = useState('pcs');
   const [minStock, setMinStock] = useState('0');
   const [active, setActive] = useState(true);
+  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [stock, setStock] = useState<StockRow[]>([]);
   const [history, setHistory] = useState<MovementRow[]>([]);
   const [camera, setCamera] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Reload when coming back from "Manage categories".
+  useFocusEffect(
+    useCallback(() => {
+      listCategories()
+        .then(setCategories)
+        .catch(() => {});
+    }, []),
+  );
 
   useEffect(() => {
     if (isNew) return;
@@ -35,6 +46,7 @@ export default function ProductScreen() {
         setUnit(p.unit);
         setMinStock(formatQty(Number(p.min_stock)));
         setActive(p.is_active);
+        setCategoryId(p.category_id);
         setStock(s);
         setHistory(h);
       })
@@ -54,6 +66,7 @@ export default function ProductScreen() {
         unit,
         min_stock: minNum,
         is_active: active,
+        category_id: categoryId,
       });
       router.back();
     } catch (e) {
@@ -128,6 +141,23 @@ export default function ProductScreen() {
             keyboardType="decimal-pad"
             editable={editable}
           />
+        </View>
+      </View>
+      <View style={{ gap: 6 }}>
+        <Text style={styles.label}>Category</Text>
+        <View style={styles.chipRow}>
+          <Chip label="Uncategorized" active={categoryId === null} onPress={() => editable && setCategoryId(null)} />
+          {categories.map((c) => (
+            <Chip
+              key={c.id}
+              label={c.name}
+              active={categoryId === c.id}
+              onPress={() => editable && setCategoryId(c.id)}
+            />
+          ))}
+          {editable && (
+            <Chip label="+ Manage" active={false} color={colors.muted} onPress={() => router.push('/categories')} />
+          )}
         </View>
       </View>
       <View style={[styles.row, { justifyContent: 'space-between' }]}>

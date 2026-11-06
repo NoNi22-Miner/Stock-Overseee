@@ -1,7 +1,17 @@
 import { supabase } from './supabase';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import type { Role } from './roles';
-import type { Location, LocationKind, MovementKind, MovementRow, Product, StockRow, Team, TeamMember } from './types';
+import type {
+  Category,
+  Location,
+  LocationKind,
+  MovementKind,
+  MovementRow,
+  Product,
+  StockRow,
+  Team,
+  TeamMember,
+} from './types';
 
 function check<T>(res: { data: T | null; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message);
@@ -32,7 +42,7 @@ export async function setLocationActive(id: string, is_active: boolean) {
 
 // Products --------------------------------------------------------------------
 
-const PRODUCT_COLS = 'id, barcode, name, unit, min_stock, is_active';
+const PRODUCT_COLS = 'id, barcode, name, unit, min_stock, is_active, category_id';
 
 export async function listProducts(search = ''): Promise<Product[]> {
   let q = supabase.from('products').select(PRODUCT_COLS).order('name').limit(500);
@@ -58,6 +68,7 @@ export async function saveProduct(id: string | null, input: ProductInput): Promi
     unit: input.unit.trim() || 'pcs',
     min_stock: input.min_stock,
     is_active: input.is_active,
+    category_id: input.category_id,
   };
   const res = id
     ? await supabase.from('products').update(row).eq('id', id).select(PRODUCT_COLS).single()
@@ -245,4 +256,32 @@ export async function getMyTeam(): Promise<Team | null> {
 
 export async function renameTeam(id: string, name: string) {
   check(await supabase.from('teams').update({ name: name.trim() }).eq('id', id));
+}
+
+// Categories ------------------------------------------------------------------
+
+export async function listCategories(): Promise<Category[]> {
+  return check(await supabase.from('categories').select('id, name').order('name'));
+}
+
+function categoryError(e: { message: string; code?: string } | null) {
+  if (!e) return;
+  if (e.code === '23505') throw new Error('A category with that name already exists.');
+  throw new Error(e.message);
+}
+
+export async function addCategory(name: string) {
+  const { error } = await supabase.from('categories').insert({ name: name.trim() });
+  categoryError(error);
+}
+
+export async function renameCategory(id: string, name: string) {
+  const { error } = await supabase.from('categories').update({ name: name.trim() }).eq('id', id);
+  categoryError(error);
+}
+
+/** Products in the category become uncategorized. */
+export async function deleteCategory(id: string) {
+  const { error } = await supabase.from('categories').delete().eq('id', id);
+  categoryError(error);
 }

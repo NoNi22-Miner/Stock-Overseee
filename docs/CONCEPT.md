@@ -45,7 +45,7 @@ Every business is a separate **team**; teams never see each other's data.
 |---|---|
 | ✅ Locations | Code + name + type (warehouse / store / other). They can be turned off but not deleted, so history stays. |
 | ✅ Products | Barcode (unique per team), name, unit, minimum stock (low-stock warning). |
-| 🔨 Categories | Each product has one category (e.g. Food, Drinks). There is a default "Uncategorized"; Team Leader / Oversee manage the list. |
+| ✅ Categories | Each product has one category (e.g. Steel Shaft, Steel Pipe, Steel Knee), or "Uncategorized". Team Leader / Oversee manage the list in **Products → Categories**; deleting a category makes its products Uncategorized. |
 | ✅ Movements | **In**, **Out**, **Transfer** (instant: leaves one location and arrives at the other at once), **Adjust** (set the counted quantity). Stock can never go below 0. Every movement records who, when and an optional note. |
 
 ## 5. Home dashboard
@@ -57,9 +57,9 @@ Every business is a separate **team**; teams never see each other's data.
 - Daily chart for all items and for each item that moved.
 - In + Out + Transfer count as movement; Adjust does not.
 
-🔨 With categories:
-- A **category filter** (All / Food / Drinks …) that applies to tiles, Top 5 lists and charts.
-- A "movement by category" chart.
+✅ With categories:
+- A **category filter** (All / Steel Shaft / Steel Pipe …) for the tiles, Top 5 lists and item charts.
+- A **Movement by category** chart (always all categories); tap a category to filter.
 
 ## 6. Working without internet (🔨)
 
@@ -110,7 +110,7 @@ English and Bahasa Indonesia. The app follows the phone's language; it can be ch
 
 ## 11. Build order
 
-1. **Location access + categories** (database first, then screens).
+1. **Location access** (database first, then screens). Categories ✅ done.
 2. **Offline queue** (local copy, queue, sync, failed-scan handling).
 3. **Excel / PDF export.**
 4. **Bahasa Indonesia.**
@@ -122,7 +122,7 @@ English and Bahasa Indonesia. The app follows the phone's language; it can be ch
 - `profiles` — member: team, role, UserID, Username, active, can_transfer, online status.
   🔨 `all_locations`.
 - 🔨 `member_locations` — which locations a member may use.
-- `locations`, `products` (🔨 + `category_id`), 🔨 `categories` — all per team.
+- `locations`, `products` (with `category_id`), `categories` — all per team.
 - `stock_levels` — quantity per product per location.
 - `movements` — log of In / Out / Transfer / Adjust with who did it. 🔨 + `client_id` (offline
   de-duplication) and `scanned_at`.

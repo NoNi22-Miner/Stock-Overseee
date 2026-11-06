@@ -4,6 +4,9 @@ import { Pressable, RefreshControl, ScrollView, Text, View, type LayoutChangeEve
 import { compact, DailyColumns, RankedBars, StatTile, chart } from '../../components/charts';
 import { Card, Chip, styles } from '../../components/ui';
 import {
+  byCategory,
+  scopeToCategory,
+  type CategoryFilter,
   leastMoving,
   loadMonthStats,
   metricValue,
@@ -34,6 +37,7 @@ export default function HomeScreen() {
   const now = new Date();
   const [ym, setYm] = useState({ y: now.getFullYear(), m: now.getMonth() });
   const [metric, setMetric] = useState<Metric>('qty');
+  const [category, setCategory] = useState<CategoryFilter>(null);
   const [stats, setStats] = useState<MonthStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,9 +74,28 @@ export default function HomeScreen() {
   const itemCardWidth = wide ? (width - 32 - 12) / 2 : undefined;
   const unitOf = (unit: string) => (metric === 'qty' ? unit : 'moves');
 
-  const top = useMemo(() => (stats ? mostMoving(stats, metric) : []), [stats, metric]);
-  const least = useMemo(() => (stats ? leastMoving(stats, metric) : []), [stats, metric]);
-  const moved = useMemo(() => (stats ? movedItems(stats, metric) : []), [stats, metric]);
+  // Tiles, Top 5 lists and item charts follow the category filter; the category chart shows all.
+  const scoped = useMemo(() => (stats ? scopeToCategory(stats, category) : null), [stats, category]);
+  const top = useMemo(() => (scoped ? mostMoving(scoped, metric) : []), [scoped, metric]);
+  const least = useMemo(() => (scoped ? leastMoving(scoped, metric) : []), [scoped, metric]);
+  const moved = useMemo(() => (scoped ? movedItems(scoped, metric) : []), [scoped, metric]);
+  const categoryRows = useMemo(
+    () =>
+      (stats ? byCategory(stats, metric) : []).map((c) => ({
+        key: c.id,
+        label: c.name,
+        value: metricValue(c.total, metric),
+        unit: metric === 'qty' ? 'units' : 'moves',
+        onPress: () => setCategory(c.id),
+      })),
+    [stats, metric],
+  );
+  const categoryName =
+    category === null
+      ? null
+      : category === 'none'
+        ? 'Uncategorized'
+        : (stats?.categories.find((c) => c.id === category)?.name ?? null);
 
   const toRows = (list: typeof top) =>
     list.map((i) => ({
@@ -123,20 +146,30 @@ export default function HomeScreen() {
 
       {error && <Text style={{ color: colors.out }}>{error}</Text>}
 
-      {stats && (
+      {stats && stats.categories.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+          <Chip label="All categories" active={category === null} onPress={() => setCategory(null)} />
+          {stats.categories.map((c) => (
+            <Chip key={c.id} label={c.name} active={category === c.id} onPress={() => setCategory(c.id)} />
+          ))}
+          <Chip label="Uncategorized" active={category === 'none'} onPress={() => setCategory('none')} />
+        </ScrollView>
+      )}
+
+      {stats && scoped && (
         <>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
             <StatTile
               label="Movements"
-              value={compact(stats.totalMoves)}
+              value={compact(scoped.totalMoves)}
               note={isCurrentMonth ? 'this month' : 'in month'}
             />
             <StatTile
               label="Items moved"
-              value={`${stats.itemsMoved}`}
-              note={`of ${stats.items.filter((i) => i.product.is_active).length} products`}
+              value={`${scoped.itemsMoved}`}
+              note={`of ${scoped.items.filter((i) => i.product.is_active).length} products`}
             />
-            <StatTile label="Low stock" value={`${stats.lowStock}`} note="items at or below minimum, now" />
+            <StatTile label="Low stock" value={`${scoped.lowStock}`} note="items at or below minimum, now" />
           </View>
 
           <View style={{ flexDirection: wide ? 'row' : 'column', gap: 12 }}>
@@ -150,11 +183,21 @@ export default function HomeScreen() {
             </Card>
           </View>
 
+          <Card style={{ gap: 12 }}>
+            <View>
+              <Text style={styles.title}>Movement by category</Text>
+              <Text style={styles.muted}>
+                {metric === 'qty' ? 'Quantity moved' : 'Times moved'} this month · tap a category to filter
+              </Text>
+            </View>
+            <RankedBars rows={categoryRows} emptyText="No categories yet. Add them in Products → Categories." />
+          </Card>
+
           <Text style={[styles.title, { marginTop: 8 }]}>Daily movement</Text>
           <Card style={{ gap: 4 }}>
-            <Text style={styles.title}>All items</Text>
+            <Text style={styles.title}>{categoryName ? `All ${categoryName} items` : 'All items'}</Text>
             <Text style={styles.muted}>Number of movements per day</Text>
-            <DailyColumns days={stats.allDays} metric="times" monthLabel={dayLabel} height={120} />
+            <DailyColumns days={scoped.allDays} metric="times" monthLabel={dayLabel} height={120} />
           </Card>
 
           {moved.length === 0 ? (

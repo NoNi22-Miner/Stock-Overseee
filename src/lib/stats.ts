@@ -1,6 +1,6 @@
-import { listProducts, lowStockCounts } from './api';
+import { listCategories, listProducts } from './api';
 import { supabase } from './supabase';
-import type { Product } from './types';
+import type { Category, Product } from './types';
 
 /** What "moving" is measured in: quantity moved, or number of movements. */
 export type Metric = 'qty' | 'times';
@@ -22,7 +22,12 @@ export type MonthStats = {
   totalMoves: number;
   itemsMoved: number;
   lowStock: number;
+  categories: Category[];
+  lowByProduct: Record<string, number>; // product id -> locations at or below minimum (now)
 };
+
+/** Category filter: a category id, 'none' for uncategorized, or null for all. */
+export type CategoryFilter = string | 'none' | null;
 
 const empty = (): DayStat => ({ qty: 0, times: 0, in: 0, out: 0, transfer: 0 });
 
@@ -57,16 +62,22 @@ export async function loadMonthStats(year: number, month: number): Promise<Month
   const to = new Date(year, month + 1, 1);
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-  const [daily, products, low] = await Promise.all([
+  const [daily, products, lowRes, categories] = await Promise.all([
     supabase.rpc('movement_daily', {
       p_from: from.toISOString(),
       p_to: to.toISOString(),
       p_tz: deviceTimeZone(),
     }),
     listProducts(),
-    lowStockCounts(),
+    supabase.from('stock_overview').select('product_id').eq('is_low', true),
+    listCategories(),
   ]);
   if (daily.error) throw new Error(daily.error.message);
+  if (lowRes.error) throw new Error(lowRes.error.message);
+  const lowByProduct: Record<string, number> = {};
+  for (const r of (lowRes.data ?? []) as { product_id: string }[]) {
+    lowByProduct[r.product_id] = (lowByProduct[r.product_id] ?? 0) + 1;
+  }
 
   const byId = new Map<string, ItemStats>();
   for (const p of products) {
@@ -98,9 +109,46 @@ export async function loadMonthStats(year: number, month: number): Promise<Month
   const items = [...byId.values()].filter((i) => i.product.is_active || i.total.times > 0);
   const totalMoves = items.reduce((n, i) => n + i.total.times, 0);
   const itemsMoved = items.filter((i) => i.total.times > 0).length;
-  const lowStock = Object.values(low).reduce((n, c) => n + c, 0);
+  const lowStock = Object.values(lowByProduct).reduce((n, c) => n + c, 0);
 
-  return { year, month, daysInMonth, items, allDays, totalMoves, itemsMoved, lowStock };
+  return { year, month, daysInMonth, items, allDays, totalMoves, itemsMoved, lowStock, categories, lowByProduct };
+}
+
+const inCategory = (p: Product, filter: CategoryFilter) =>
+  filter === null || (filter === 'none' ? !p.category_id : p.category_id === filter);
+
+/** The month's stats limited to one category (or all), with totals recomputed. */
+export function scopeToCategory(stats: MonthStats, filter: CategoryFilter): MonthStats {
+  if (filter === null) return stats;
+  const items = stats.items.filter((i) => inCategory(i.product, filter));
+  const allDays = Array.from({ length: stats.daysInMonth }, empty);
+  for (const i of items) i.days.forEach((d, n) => add(allDays[n], d));
+  return {
+    ...stats,
+    items,
+    allDays,
+    totalMoves: items.reduce((n, i) => n + i.total.times, 0),
+    itemsMoved: items.filter((i) => i.total.times > 0).length,
+    lowStock: items.reduce((n, i) => n + (stats.lowByProduct[i.product.id] ?? 0), 0),
+  };
+}
+
+export type CategoryTotal = { id: string | 'none'; name: string; total: DayStat; products: number };
+
+/** Movement per category this month, busiest first; includes categories that did not move. */
+export function byCategory(stats: MonthStats, metric: Metric): CategoryTotal[] {
+  const rows = new Map<string, CategoryTotal>();
+  for (const c of stats.categories) rows.set(c.id, { id: c.id, name: c.name, total: empty(), products: 0 });
+  for (const i of stats.items) {
+    const key = i.product.category_id && rows.has(i.product.category_id) ? i.product.category_id : 'none';
+    if (!rows.has(key)) rows.set(key, { id: 'none', name: 'Uncategorized', total: empty(), products: 0 });
+    const row = rows.get(key)!;
+    add(row.total, i.total);
+    row.products += 1;
+  }
+  return [...rows.values()]
+    .filter((r) => r.id !== 'none' || r.products > 0)
+    .sort((a, b) => value(b.total, metric) - value(a.total, metric) || a.name.localeCompare(b.name));
 }
 
 const value = (s: DayStat, metric: Metric) => (metric === 'qty' ? s.qty : s.times);

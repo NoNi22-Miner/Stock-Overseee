@@ -15,7 +15,10 @@ export type Product = {
   unit: string;
   min_stock: number;
   is_active: boolean;
+  category_id: string | null;
 };
+
+export type Category = { id: string; name: string };
 
 export type StockRow = {
   product_id: string;
