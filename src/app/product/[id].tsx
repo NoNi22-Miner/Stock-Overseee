@@ -5,12 +5,15 @@ import { BarcodeScanner } from '../../components/BarcodeScanner';
 import { HistoryItem } from '../../components/HistoryList';
 import { Button, Card, Field, styles } from '../../components/ui';
 import { formatQty, getProduct, listHistory, saveProduct, stockForProduct } from '../../lib/api';
+import { useRole } from '../../lib/auth';
+import { can } from '../../lib/roles';
 import { colors } from '../../lib/theme';
 import type { MovementRow, StockRow } from '../../lib/types';
 
 export default function ProductScreen() {
   const params = useLocalSearchParams<{ id: string; barcode?: string }>();
   const isNew = params.id === 'new';
+  const editable = can.manageProducts(useRole());
 
   const [loading, setLoading] = useState(!isNew);
   const [barcode, setBarcode] = useState(params.barcode ?? '');
@@ -88,14 +91,34 @@ export default function ProductScreen() {
 
       <View style={[styles.row, { alignItems: 'flex-end' }]}>
         <View style={{ flex: 1 }}>
-          <Field label="Barcode" value={barcode} onChangeText={setBarcode} autoCapitalize="none" autoCorrect={false} />
+          <Field
+            label="Barcode"
+            value={barcode}
+            onChangeText={setBarcode}
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={editable}
+          />
         </View>
-        <Button title="Scan" variant="outline" onPress={() => setCamera(true)} />
+        {editable && <Button title="Scan" variant="outline" onPress={() => setCamera(true)} />}
       </View>
-      <Field label="Name" value={name} onChangeText={setName} placeholder="e.g. Indomie Goreng 85g" />
+      <Field
+        label="Name"
+        value={name}
+        onChangeText={setName}
+        placeholder="e.g. Indomie Goreng 85g"
+        editable={editable}
+      />
       <View style={styles.row}>
         <View style={{ flex: 1 }}>
-          <Field label="Unit" value={unit} onChangeText={setUnit} placeholder="pcs, box, kg" autoCapitalize="none" />
+          <Field
+            label="Unit"
+            value={unit}
+            onChangeText={setUnit}
+            placeholder="pcs, box, kg"
+            autoCapitalize="none"
+            editable={editable}
+          />
         </View>
         <View style={{ flex: 1 }}>
           <Field
@@ -103,14 +126,17 @@ export default function ProductScreen() {
             value={minStock}
             onChangeText={setMinStock}
             keyboardType="decimal-pad"
+            editable={editable}
           />
         </View>
       </View>
       <View style={[styles.row, { justifyContent: 'space-between' }]}>
         <Text style={{ color: colors.text, fontSize: 16 }}>Active</Text>
-        <Switch value={active} onValueChange={setActive} />
+        <Switch value={active} onValueChange={setActive} disabled={!editable} />
       </View>
-      <Button title={isNew ? 'Create product' : 'Save changes'} onPress={save} loading={saving} disabled={!valid} />
+      {editable && (
+        <Button title={isNew ? 'Create product' : 'Save changes'} onPress={save} loading={saving} disabled={!valid} />
+      )}
 
       {!isNew && (
         <>

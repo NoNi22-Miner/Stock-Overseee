@@ -3,10 +3,13 @@ import { useCallback, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, Text, TextInput, View } from 'react-native';
 import { Button, Empty, styles } from '../../components/ui';
 import { formatQty, listProducts } from '../../lib/api';
+import { useRole } from '../../lib/auth';
+import { can } from '../../lib/roles';
 import { colors } from '../../lib/theme';
 import type { Product } from '../../lib/types';
 
 export default function ProductsScreen() {
+  const role = useRole();
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
@@ -38,10 +41,12 @@ export default function ProductsScreen() {
   return (
     <View style={styles.screen}>
       <View style={[styles.pad, { paddingBottom: 4 }]}>
-        <Button
-          title="+ Add product"
-          onPress={() => router.push({ pathname: '/product/[id]', params: { id: 'new' } })}
-        />
+        {can.manageProducts(role) && (
+          <Button
+            title="+ Add product"
+            onPress={() => router.push({ pathname: '/product/[id]', params: { id: 'new' } })}
+          />
+        )}
         <TextInput
           style={styles.input}
           placeholder="Search name or barcode"

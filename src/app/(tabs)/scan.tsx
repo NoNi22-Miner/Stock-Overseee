@@ -4,7 +4,16 @@ import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } fro
 import { BarcodeScanner } from '../../components/BarcodeScanner';
 import { LocationPicker } from '../../components/LocationPicker';
 import { Button, Card, Chip, Field, styles } from '../../components/ui';
-import { findProductByBarcode, formatQty, listLocations, recordMovement, stockForProduct } from '../../lib/api';
+import {
+  findProductByBarcode,
+  formatQty,
+  listLocations,
+  recordAdjustment,
+  recordMovement,
+  stockForProduct,
+} from '../../lib/api';
+import { useRole } from '../../lib/auth';
+import { can } from '../../lib/roles';
 import { colors, kindColor } from '../../lib/theme';
 import type { Location, MovementKind, Product, StockRow } from '../../lib/types';
 
@@ -12,9 +21,12 @@ const MODES: { kind: MovementKind; label: string }[] = [
   { kind: 'IN', label: 'Stock In' },
   { kind: 'OUT', label: 'Stock Out' },
   { kind: 'TRANSFER', label: 'Transfer' },
+  { kind: 'ADJUST', label: 'Adjust' },
 ];
 
 export default function ScanScreen() {
+  const role = useRole();
+  const modes = MODES.filter((m) => m.kind !== 'ADJUST' || can.adjustStock(role));
   const [locations, setLocations] = useState<Location[]>([]);
   const [mode, setMode] = useState<MovementKind>('IN');
   const [fromId, setFromId] = useState<string | null>(null);
@@ -40,8 +52,8 @@ export default function ScanScreen() {
           setLocations(locs);
           const wrh = locs.find((l) => l.kind === 'warehouse') ?? locs[0];
           const store = locs.find((l) => l.kind === 'store' && l.id !== wrh?.id) ?? locs.find((l) => l.id !== wrh?.id);
-          setFromId((cur) => (locs.some((l) => l.id === cur) ? cur : wrh?.id ?? null));
-          setToId((cur) => (locs.some((l) => l.id === cur) ? cur : store?.id ?? wrh?.id ?? null));
+          setFromId((cur) => (locs.some((l) => l.id === cur) ? cur : (wrh?.id ?? null)));
+          setToId((cur) => (locs.some((l) => l.id === cur) ? cur : (store?.id ?? wrh?.id ?? null)));
         })
         .catch((e) => setMessage({ ok: false, text: e.message }));
       // Coming back from "Register product": look the barcode up again.
@@ -61,8 +73,9 @@ export default function ScanScreen() {
       setLookedUp(barcode);
       setProduct(p);
       unknownCode.current = p ? null : barcode;
-      setStock(p ? await stockForProduct(p.id) : []);
-      setQty('1');
+      const rows = p ? await stockForProduct(p.id) : [];
+      setStock(rows);
+      setQty(mode === 'ADJUST' ? formatQty(rows.find((r) => r.location_id === fromId)?.qty ?? 0) : '1');
     } catch (e) {
       setMessage({ ok: false, text: (e as Error).message });
     } finally {
@@ -80,24 +93,41 @@ export default function ScanScreen() {
     setNote('');
   }
 
-  // Which side(s) each mode uses.
-  const usesFrom = mode === 'OUT' || mode === 'TRANSFER';
+  // Which side(s) each mode uses. ADJUST uses the "from" picker as its location.
+  const isAdjust = mode === 'ADJUST';
+  const usesFrom = mode === 'OUT' || mode === 'TRANSFER' || isAdjust;
   const usesTo = mode === 'IN' || mode === 'TRANSFER';
   const fromLoc = locations.find((l) => l.id === fromId);
   const toLoc = locations.find((l) => l.id === toId);
   const qtyNum = Number(qty.replace(',', '.'));
   const available = stock.find((s) => s.location_id === fromId)?.qty ?? 0;
+  const currentAt = (id: string | null) => stock.find((s) => s.location_id === id)?.qty ?? 0;
+
+  function chooseMode(k: MovementKind) {
+    setMode(k);
+    setQty(k === 'ADJUST' ? formatQty(currentAt(fromId)) : '1');
+  }
+
+  function chooseFrom(id: string) {
+    setFromId(id);
+    if (isAdjust) setQty(formatQty(currentAt(id)));
+  }
 
   let problem: string | null = null;
   if (!product) problem = 'Scan a product first';
-  else if (!(qtyNum > 0)) problem = 'Enter a quantity above 0';
+  else if (isAdjust) {
+    if (qty.trim() === '' || !(qtyNum >= 0)) problem = 'Enter the counted quantity (0 or more)';
+    else if (!fromLoc) problem = 'Pick a location';
+    else if (qtyNum === available) problem = `Stock at ${fromLoc.code} is already ${formatQty(available)}`;
+  } else if (!(qtyNum > 0)) problem = 'Enter a quantity above 0';
   else if (usesFrom && !fromLoc) problem = 'Pick a source location';
   else if (usesTo && !toLoc) problem = 'Pick a destination location';
   else if (mode === 'TRANSFER' && fromId === toId) problem = 'Source and destination must differ';
   else if (usesFrom && qtyNum > available) problem = `Only ${formatQty(available)} at ${fromLoc?.code}`;
 
-  const summary =
-    mode === 'IN'
+  const summary = isAdjust
+    ? `Set ${fromLoc?.code ?? '?'}: ${formatQty(available)} → ${formatQty(qtyNum || 0)}`
+    : mode === 'IN'
       ? `In ${formatQty(qtyNum || 0)} → ${toLoc?.code ?? '?'}`
       : mode === 'OUT'
         ? `Out ${formatQty(qtyNum || 0)} ← ${fromLoc?.code ?? '?'}`
@@ -107,14 +137,18 @@ export default function ScanScreen() {
     if (!product || problem) return;
     setBusy(true);
     try {
-      await recordMovement({
-        kind: mode,
-        productId: product.id,
-        qty: qtyNum,
-        fromId: usesFrom ? fromId : null,
-        toId: usesTo ? toId : null,
-        note,
-      });
+      if (mode === 'ADJUST') {
+        await recordAdjustment({ productId: product.id, locationId: fromId!, newQty: qtyNum, note });
+      } else {
+        await recordMovement({
+          kind: mode,
+          productId: product.id,
+          qty: qtyNum,
+          fromId: usesFrom ? fromId : null,
+          toId: usesTo ? toId : null,
+          note,
+        });
+      }
       setMessage({ ok: true, text: `Saved: ${product.name} — ${summary} ${product.unit}` });
       reset();
     } catch (e) {
@@ -130,23 +164,23 @@ export default function ScanScreen() {
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.pad} keyboardShouldPersistTaps="handled">
         <View style={styles.chipRow}>
-          {MODES.map((m) => (
+          {modes.map((m) => (
             <Chip
               key={m.kind}
               label={m.label}
               active={mode === m.kind}
               color={kindColor[m.kind]}
-              onPress={() => setMode(m.kind)}
+              onPress={() => chooseMode(m.kind)}
             />
           ))}
         </View>
 
         {usesFrom && (
           <LocationPicker
-            label={mode === 'TRANSFER' ? 'From' : 'Take out of'}
+            label={isAdjust ? 'Location to count' : mode === 'TRANSFER' ? 'From' : 'Take out of'}
             locations={locations}
             value={fromId}
-            onChange={setFromId}
+            onChange={chooseFrom}
           />
         )}
         {usesTo && (
@@ -182,10 +216,14 @@ export default function ScanScreen() {
           <Card>
             <Text style={styles.title}>Unknown barcode</Text>
             <Text style={styles.muted}>{lookedUp}</Text>
-            <Button
-              title="Register this product"
-              onPress={() => router.push({ pathname: '/product/[id]', params: { id: 'new', barcode: lookedUp } })}
-            />
+            {can.manageProducts(role) ? (
+              <Button
+                title="Register this product"
+                onPress={() => router.push({ pathname: '/product/[id]', params: { id: 'new', barcode: lookedUp } })}
+              />
+            ) : (
+              <Text style={{ color: colors.text }}>Ask the Owner or an Oversee to register this product.</Text>
+            )}
           </Card>
         )}
 
@@ -205,7 +243,9 @@ export default function ScanScreen() {
               })}
             </View>
 
-            <Text style={[styles.label, { marginTop: 8 }]}>Quantity ({product.unit})</Text>
+            <Text style={[styles.label, { marginTop: 8 }]}>
+              {isAdjust ? `Counted quantity at ${fromLoc?.code ?? '?'}` : 'Quantity'} ({product.unit})
+            </Text>
             <View style={styles.row}>
               <Button title="−" variant="outline" onPress={() => step(-1)} style={{ width: 56 }} />
               <TextInput
@@ -217,7 +257,12 @@ export default function ScanScreen() {
               />
               <Button title="+" variant="outline" onPress={() => step(1)} style={{ width: 56 }} />
             </View>
-            <Field label="Note (optional)" value={note} onChangeText={setNote} placeholder="e.g. supplier, invoice no." />
+            <Field
+              label="Note (optional)"
+              value={note}
+              onChangeText={setNote}
+              placeholder={isAdjust ? 'e.g. stock count, damaged' : 'e.g. supplier, invoice no.'}
+            />
 
             {problem && <Text style={{ color: colors.out }}>{problem}</Text>}
             <Button

@@ -3,8 +3,8 @@ import { useCallback, useState } from 'react';
 import { Alert, ScrollView, Switch, Text, View } from 'react-native';
 import { Button, Card, Chip, Field, styles } from '../../components/ui';
 import { addLocation, listLocations, setLocationActive } from '../../lib/api';
-import { useAuth } from '../../lib/auth';
-import { supabase } from '../../lib/supabase';
+import { useAuth, useRole } from '../../lib/auth';
+import { can, ROLE_LABEL } from '../../lib/roles';
 import { colors } from '../../lib/theme';
 import type { Location, LocationKind } from '../../lib/types';
 
@@ -15,7 +15,9 @@ const KINDS: { kind: LocationKind; label: string }[] = [
 ];
 
 export default function MoreScreen() {
-  const { session } = useAuth();
+  const { session, profile, signOut } = useAuth();
+  const role = useRole();
+  const manage = can.manageLocations(role);
   const [locations, setLocations] = useState<Location[]>([]);
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
@@ -67,32 +69,38 @@ export default function MoreScreen() {
             </Text>
             <Text style={styles.muted}>{l.name}</Text>
           </View>
-          <Switch value={l.is_active} onValueChange={() => toggle(l)} />
+          <Switch value={l.is_active} onValueChange={() => toggle(l)} disabled={!manage} />
         </Card>
       ))}
 
-      <Card style={{ gap: 10 }}>
-        <Text style={styles.title}>Add location</Text>
-        <Field
-          label="Code (short, e.g. TOKO2)"
-          value={code}
-          onChangeText={(t) => setCode(t.toUpperCase())}
-          autoCapitalize="characters"
-          maxLength={12}
-        />
-        <Field label="Name" value={name} onChangeText={setName} placeholder="e.g. Toko Cabang 2" />
-        <View style={styles.chipRow}>
-          {KINDS.map((k) => (
-            <Chip key={k.kind} label={k.label} active={kind === k.kind} onPress={() => setKind(k.kind)} />
-          ))}
-        </View>
-        <Button title="Add location" onPress={add} loading={busy} disabled={!validCode || !name.trim()} />
-      </Card>
+      {manage && (
+        <Card style={{ gap: 10 }}>
+          <Text style={styles.title}>Add location</Text>
+          <Field
+            label="Code (short, e.g. TOKO2)"
+            value={code}
+            onChangeText={(t) => setCode(t.toUpperCase())}
+            autoCapitalize="characters"
+            maxLength={12}
+          />
+          <Field label="Name" value={name} onChangeText={setName} placeholder="e.g. Toko Cabang 2" />
+          <View style={styles.chipRow}>
+            {KINDS.map((k) => (
+              <Chip key={k.kind} label={k.label} active={kind === k.kind} onPress={() => setKind(k.kind)} />
+            ))}
+          </View>
+          <Button title="Add location" onPress={add} loading={busy} disabled={!validCode || !name.trim()} />
+        </Card>
+      )}
 
       <Text style={[styles.title, { marginTop: 12 }]}>Account</Text>
       <Card>
-        <Text style={{ color: colors.text }}>{session?.user.email}</Text>
-        <Button title="Sign out" variant="outline" color={colors.out} onPress={() => supabase.auth.signOut()} />
+        <Text style={styles.title}>{profile?.display_name || profile?.user_code || 'Owner'}</Text>
+        <Text style={styles.muted}>
+          {profile?.user_code ? `User ID: ${profile.user_code}` : session?.user.email}
+          {role ? `  ·  ${ROLE_LABEL[role]}` : ''}
+        </Text>
+        <Button title="Sign out" variant="outline" color={colors.out} onPress={signOut} />
       </Card>
     </ScrollView>
   );

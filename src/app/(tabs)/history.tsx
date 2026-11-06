@@ -7,7 +7,7 @@ import { listHistory, listLocations } from '../../lib/api';
 import { colors, kindColor } from '../../lib/theme';
 import type { Location, MovementKind, MovementRow } from '../../lib/types';
 
-const KINDS: MovementKind[] = ['IN', 'OUT', 'TRANSFER'];
+const KINDS: MovementKind[] = ['IN', 'OUT', 'TRANSFER', 'ADJUST'];
 
 export default function HistoryScreen() {
   const [locations, setLocations] = useState<Location[]>([]);

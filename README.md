@@ -58,9 +58,21 @@ SDK 58; update Expo Go if it says the project is incompatible.
 npx eas-cli@latest build --profile preview --platform android
 ```
 
-## Accounts
+## Accounts & roles
 
-Staff sign in with email and password. New Supabase projects require email confirmation by
-default. To change that, or to stop strangers from creating accounts, go to the Supabase
-dashboard: *Authentication → Sign In / Providers* (turn off *Confirm email* or *Allow new users
-to sign up*). You can also add staff accounts by hand under *Authentication → Users*.
+| Role         | Sign in with | Can do                                                                  |
+| ------------ | ------------ | ----------------------------------------------------------------------- |
+| **Owner**    | Email        | Everything, plus create / edit / disable / delete accounts              |
+| **Oversee**  | User ID      | See who is online (Team tab), adjust stock, stock in/out/transfer, manage products & locations |
+| **Staff**    | User ID      | Stock in / out / transfer only                                          |
+| **Onlooker** | User ID      | Look at stock and history only                                          |
+
+- The Owner creates accounts in the app: **Team → + Add account** (User ID, name, role, password).
+- User IDs are stored in Supabase Auth as `<userid>@users.stock-overseee.invalid`; nobody needs that address.
+- Account changes go through the `manage-users` Edge Function (`supabase/functions/manage-users`), which
+  checks that the caller is the Owner.
+- Rules are enforced in the database (Row Level Security + `record_movement` / `record_adjustment`),
+  not only in the app.
+- An account with no role (for example someone who used the public sign-up API) sees nothing.
+  You can also turn off public sign-ups in Supabase: *Authentication → Sign In / Providers →
+  Allow new users to sign up*.

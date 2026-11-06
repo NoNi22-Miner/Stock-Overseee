@@ -1,5 +1,7 @@
 import { supabase } from './supabase';
-import type { Location, LocationKind, MovementKind, MovementRow, Product, StockRow } from './types';
+import { FunctionsHttpError } from '@supabase/supabase-js';
+import type { Role } from './roles';
+import type { Location, LocationKind, MovementKind, MovementRow, Product, StockRow, TeamMember } from './types';
 
 function check<T>(res: { data: T | null; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message);
@@ -99,7 +101,7 @@ export async function lowStockCounts(): Promise<Record<string, number>> {
 // Movements -------------------------------------------------------------------
 
 export async function recordMovement(input: {
-  kind: MovementKind;
+  kind: Exclude<MovementKind, 'ADJUST'>;
   productId: string;
   qty: number;
   fromId?: string | null;
@@ -112,6 +114,21 @@ export async function recordMovement(input: {
     p_qty: input.qty,
     p_from: input.fromId ?? null,
     p_to: input.toId ?? null,
+    p_note: input.note ?? null,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function recordAdjustment(input: {
+  productId: string;
+  locationId: string;
+  newQty: number;
+  note?: string;
+}) {
+  const { error } = await supabase.rpc('record_adjustment', {
+    p_product_id: input.productId,
+    p_location_id: input.locationId,
+    p_new_qty: input.newQty,
     p_note: input.note ?? null,
   });
   if (error) throw new Error(error.message);
@@ -131,7 +148,49 @@ export async function listHistory(opts: {
   if (opts.locationId) q = q.or(`from_location_id.eq.${opts.locationId},to_location_id.eq.${opts.locationId}`);
   if (opts.kind) q = q.eq('kind', opts.kind);
   if (opts.productId) q = q.eq('product_id', opts.productId);
-  return check(await q).map((m: MovementRow) => ({ ...m, qty: Number(m.qty) }));
+  return check(await q).map((m: MovementRow) => ({
+    ...m,
+    qty: Number(m.qty),
+    qty_before: m.qty_before == null ? null : Number(m.qty_before),
+    qty_after: m.qty_after == null ? null : Number(m.qty_after),
+  }));
+}
+
+// Team & accounts -------------------------------------------------------------
+
+const ROLE_ORDER: Record<Role, number> = { owner: 0, oversee: 1, staff: 2, onlooker: 3 };
+
+export async function listTeam(): Promise<TeamMember[]> {
+  const rows: TeamMember[] = check(await supabase.from('team_presence').select('*'));
+  return rows.sort(
+    (a, b) =>
+      Number(b.online) - Number(a.online) ||
+      ROLE_ORDER[a.role] - ROLE_ORDER[b.role] ||
+      (a.display_name || a.user_code || '').localeCompare(b.display_name || b.user_code || ''),
+  );
+}
+
+export async function getTeamMember(id: string): Promise<TeamMember> {
+  return check(await supabase.from('team_presence').select('*').eq('id', id).single());
+}
+
+type ManageUserBody =
+  | { action: 'create'; user_code: string; display_name: string; role: Role; password: string }
+  | { action: 'update'; user_id: string; display_name?: string; role?: Role; is_active?: boolean }
+  | { action: 'set_password'; user_id: string; password: string }
+  | { action: 'delete'; user_id: string };
+
+/** Owner-only account changes, done by the "manage-users" Edge Function. */
+export async function manageUser(body: ManageUserBody): Promise<{ ok: true; id?: string }> {
+  const { data, error } = await supabase.functions.invoke('manage-users', { body });
+  if (error) {
+    if (error instanceof FunctionsHttpError) {
+      const payload = await error.context.json().catch(() => null);
+      throw new Error(payload?.error ?? error.message);
+    }
+    throw new Error(error.message);
+  }
+  return data;
 }
 
 // Helpers ---------------------------------------------------------------------

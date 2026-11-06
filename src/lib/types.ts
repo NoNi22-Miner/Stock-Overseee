@@ -30,7 +30,7 @@ export type StockRow = {
   is_low: boolean;
 };
 
-export type MovementKind = 'IN' | 'OUT' | 'TRANSFER';
+export type MovementKind = 'IN' | 'OUT' | 'TRANSFER' | 'ADJUST';
 
 export type MovementRow = {
   id: number;
@@ -46,4 +46,18 @@ export type MovementRow = {
   from_code: string | null;
   to_location_id: string | null;
   to_code: string | null;
+  qty_before: number | null;
+  qty_after: number | null;
+  actor_name: string | null;
+};
+
+export type TeamMember = {
+  id: string;
+  user_code: string | null;
+  display_name: string;
+  role: import('./roles').Role;
+  is_active: boolean;
+  last_seen_at: string | null;
+  online: boolean;
+  created_at: string;
 };
