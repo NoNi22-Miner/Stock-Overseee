@@ -35,16 +35,27 @@ Supabase with the publishable key in `.env`. Only signed-in users can read or wr
 
 ## Run it
 
-```bash
-npm install
-npx expo start          # then press "a" for an Android emulator/device
-```
+### Quick test with Expo Go
 
-The camera scanner needs a development build (it does not run in Expo Go):
+Everything the app uses (camera scanner included) is built into Expo Go, so no custom build is needed.
+
+1. Install **Expo Go** from the Play Store on your Android phone.
+2. On a computer with Node.js 20+:
+   ```bash
+   git clone https://github.com/NoNi22-Miner/Stock-Overseee
+   cd Stock-Overseee
+   npm install
+   npx expo start            # add --tunnel if phone and computer are on different networks
+   ```
+3. Open Expo Go and scan the QR code shown in the terminal.
+
+The phone and computer must be on the same Wi-Fi (or use `--tunnel`). Expo Go must support
+SDK 58; update Expo Go if it says the project is incompatible.
+
+### Installable APK (no computer needed to run it)
 
 ```bash
-npx eas-cli@latest build --profile development --platform android   # dev build APK
-npx eas-cli@latest build --profile preview --platform android       # shareable test APK
+npx eas-cli@latest build --profile preview --platform android
 ```
 
 ## Accounts
