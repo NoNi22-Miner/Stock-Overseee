@@ -20,6 +20,7 @@ export default function UserScreen() {
   const [member, setMember] = useState<TeamMember | null>(null);
   const [loading, setLoading] = useState(!isNew);
   const [userCode, setUserCode] = useState('');
+  const [username, setUsername] = useState('');
   const [name, setName] = useState('');
   const [role, setRole] = useState<Role>('staff');
   const [active, setActive] = useState(true);
@@ -33,6 +34,8 @@ export default function UserScreen() {
     getTeamMember(id)
       .then((m) => {
         setMember(m);
+        setUserCode(m.user_code ?? '');
+        setUsername(m.username ?? '');
         setName(m.display_name);
         setRole(m.role);
         setActive(m.is_active);
@@ -45,7 +48,7 @@ export default function UserScreen() {
   if (!can.manageUsers(myRole)) {
     return (
       <View style={[styles.screen, styles.pad]}>
-        <Text style={styles.title}>Only the Owner can manage accounts.</Text>
+        <Text style={styles.title}>Only the Team Leader can manage accounts.</Text>
       </View>
     );
   }
@@ -60,6 +63,8 @@ export default function UserScreen() {
 
   const isOwnerAccount = member?.role === 'owner';
   const code = userCode.trim().toLowerCase();
+  const uname = username.trim().toLowerCase();
+  const namesValid = USER_CODE.test(code) && (!uname || (USER_CODE.test(uname) && uname !== code));
 
   async function run(label: string, fn: () => Promise<unknown>, done?: string) {
     setBusy(label);
@@ -80,6 +85,7 @@ export default function UserScreen() {
       manageUser({
         action: 'create',
         user_code: code,
+        username: uname,
         display_name: name,
         role,
         password,
@@ -87,7 +93,8 @@ export default function UserScreen() {
       }),
     );
     if (ok) {
-      Alert.alert('Account created', `User ID: ${code}\nPassword: ${password}\n\nGive these to the person.`, [
+      const names = uname ? `UserID: ${code}\nUsername: ${uname}` : `UserID: ${code}`;
+      Alert.alert('Account created', `${names}\nPassword: ${password}\n\nGive these to the person.`, [
         { text: 'OK', onPress: () => router.back() },
       ]);
     }
@@ -100,7 +107,9 @@ export default function UserScreen() {
         action: 'update',
         user_id: member.id,
         display_name: name,
-        ...(isOwnerAccount ? {} : { role, is_active: active, can_transfer: canTransfer }),
+        ...(isOwnerAccount
+          ? {}
+          : { user_code: code, username: uname, role, is_active: active, can_transfer: canTransfer }),
       }),
     );
     if (ok) router.back();
@@ -127,24 +136,43 @@ export default function UserScreen() {
         options={{ title: isNew ? 'New account' : member?.display_name || member?.user_code || 'Account' }}
       />
 
-      {isNew ? (
-        <Field
-          label="User ID (used to sign in)"
-          value={userCode}
-          onChangeText={(t) => setUserCode(t.toLowerCase().replace(/\s/g, ''))}
-          autoCapitalize="none"
-          autoCorrect={false}
-          placeholder="e.g. budi.wrh"
-          maxLength={32}
-        />
-      ) : (
+      {!isNew && (
         <Card>
-          <Text style={styles.label}>{isOwnerAccount ? 'Signs in with email' : 'User ID'}</Text>
-          <Text style={styles.title}>{member?.user_code ?? 'Owner'}</Text>
+          <Text style={styles.label}>
+            {isOwnerAccount ? 'Team Leader · signs in with email' : ROLE_LABEL[member!.role]}
+          </Text>
           <Text style={styles.muted}>
             {member?.online ? 'Online now' : `Last seen ${timeAgo(member?.last_seen_at ?? null)}`}
           </Text>
         </Card>
+      )}
+
+      {!isOwnerAccount && (
+        <>
+          <Field
+            label="UserID (signs in)"
+            value={userCode}
+            onChangeText={(t) => setUserCode(t.toLowerCase().replace(/\s/g, ''))}
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="e.g. budi01"
+            maxLength={32}
+          />
+          <Field
+            label="Username (optional, also signs in)"
+            value={username}
+            onChangeText={(t) => setUsername(t.toLowerCase().replace(/\s/g, ''))}
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="e.g. budi.wrh"
+            maxLength={32}
+          />
+          {(code.length > 0 || uname.length > 0) && !namesValid && (
+            <Text style={{ color: colors.out }}>
+              3-32 characters: letters, numbers, dot, dash or underscore. UserID and Username must differ.
+            </Text>
+          )}
+        </>
       )}
 
       <Field label="Name" value={name} onChangeText={setName} placeholder="e.g. Budi (Gudang)" />
@@ -189,11 +217,8 @@ export default function UserScreen() {
             title="Create account"
             onPress={create}
             loading={busy === 'create'}
-            disabled={!USER_CODE.test(code) || password.length < 6 || !!busy}
+            disabled={!namesValid || password.length < 6 || !!busy}
           />
-          {code.length > 0 && !USER_CODE.test(code) && (
-            <Text style={{ color: colors.out }}>3-32 characters: letters, numbers, dot, dash or underscore.</Text>
-          )}
         </>
       ) : (
         <>
@@ -206,7 +231,12 @@ export default function UserScreen() {
               <Switch value={active} onValueChange={setActive} />
             </View>
           )}
-          <Button title="Save changes" onPress={save} loading={busy === 'save'} disabled={!!busy} />
+          <Button
+            title="Save changes"
+            onPress={save}
+            loading={busy === 'save'}
+            disabled={!!busy || (!isOwnerAccount && !namesValid)}
+          />
 
           <Card style={{ gap: 10, marginTop: 12 }}>
             <Text style={styles.title}>Reset password</Text>

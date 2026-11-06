@@ -58,21 +58,34 @@ SDK 58; update Expo Go if it says the project is incompatible.
 npx eas-cli@latest build --profile preview --platform android
 ```
 
-## Accounts & roles
+## Teams, accounts & roles
 
-| Role         | Sign in with | Can do                                                                  |
-| ------------ | ------------ | ----------------------------------------------------------------------- |
-| **Owner**    | Email        | Everything, plus create / edit / disable / delete accounts              |
-| **Oversee**  | User ID      | See who is online (Team tab), adjust stock, stock in/out/transfer, manage products & locations |
-| **Staff**    | User ID      | Stock in / out / transfer only                                          |
-| **Onlooker** | User ID      | Look at stock and history only                                          |
+Each **Team Leader** signs up with email and gets their own team. Teams never see each other's data
+(locations, products, stock, history, members).
 
-- The Owner creates accounts in the app: **Team → + Add account** (User ID, name, role, password).
-- User IDs are stored in Supabase Auth as `<userid>@users.stock-overseee.invalid`; nobody needs that address.
-- Account changes go through the `manage-users` Edge Function (`supabase/functions/manage-users`), which
-  checks that the caller is the Owner.
-- Rules are enforced in the database (Row Level Security + `record_movement` / `record_adjustment`),
-  not only in the app.
-- An account with no role (for example someone who used the public sign-up API) sees nothing.
-  You can also turn off public sign-ups in Supabase: *Authentication → Sign In / Providers →
-  Allow new users to sign up*.
+| Role            | Signs in with              | Can do                                                                    |
+| --------------- | -------------------------- | ------------------------------------------------------------------------- |
+| **Team Leader** | Email                      | Everything in their team, creates / edits / disables / deletes accounts, deletes the team |
+| **Oversee**     | UserID or Username         | See who is online, adjust stock, stock in/out/transfer, manage products & locations |
+| **Staff**       | UserID or Username         | Stock in / out; transfer only if the Team Leader allows it                |
+| **Onlooker**    | UserID or Username         | Look at stock and history only                                            |
+
+- The login screen has one box: **UserID / Username / Email**. `resolve_login()` turns a UserID or
+  Username into the account's internal Auth email (`<random key>@users.stock-overseee.invalid`);
+  unknown names get a stable fake address, so the login screen never reveals which names exist.
+- **Sign up** (login screen) is for new Team Leaders only. After confirming their email and signing in
+  they name their team (`create_team()`), and WRH + TOKO are created for them.
+- Team Leaders create members in **Team → + Add account** (UserID, optional Username, name, role,
+  password). This runs in the `manage-users` Edge Function, which only acts inside the caller's team.
+- **More → Delete team & account** removes the Team Leader, every member and all team data
+  (required for Play Store apps that let people create accounts).
+- Rules are enforced in the database (Row Level Security + `record_movement` / `record_adjustment`
+  check the caller's team and role), not only in the app.
+
+### Before publishing to the Play Store
+
+- Supabase → Authentication → **SMTP**: set up your own email sender; the built-in one only sends a
+  few emails per hour, which is not enough for public sign-ups.
+- Supabase → Authentication → **URL Configuration**: set the Site URL to your website, so the
+  email confirmation link lands on a real page.
+- Play Console needs a privacy policy URL and an app signed with your own upload key (AAB).

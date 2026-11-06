@@ -2,11 +2,12 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Alert, ScrollView, Switch, Text, View } from 'react-native';
 import { Button, Card, Chip, Field, styles } from '../../components/ui';
-import { addLocation, listLocations, setLocationActive } from '../../lib/api';
+import { addLocation, getMyTeam, listLocations, manageUser, renameTeam, setLocationActive } from '../../lib/api';
 import { useAuth, useRole } from '../../lib/auth';
 import { can, ROLE_LABEL } from '../../lib/roles';
+import { supabase } from '../../lib/supabase';
 import { colors } from '../../lib/theme';
-import type { Location, LocationKind } from '../../lib/types';
+import type { Location, LocationKind, Team } from '../../lib/types';
 
 const KINDS: { kind: LocationKind; label: string }[] = [
   { kind: 'warehouse', label: 'Warehouse' },
@@ -18,22 +19,34 @@ export default function MoreScreen() {
   const { profile, signOut } = useAuth();
   const role = useRole();
   const manage = can.manageLocations(role);
+  const isLeader = can.manageUsers(role);
+
+  const [team, setTeam] = useState<Team | null>(null);
+  const [teamName, setTeamName] = useState('');
   const [locations, setLocations] = useState<Location[]>([]);
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [kind, setKind] = useState<LocationKind>('store');
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [confirmName, setConfirmName] = useState('');
+  const [showDelete, setShowDelete] = useState(false);
 
   const load = useCallback(() => {
     listLocations(true)
       .then(setLocations)
       .catch((e) => Alert.alert('Error', e.message));
+    getMyTeam()
+      .then((t) => {
+        setTeam(t);
+        setTeamName(t?.name ?? '');
+      })
+      .catch(() => {});
   }, []);
 
   useFocusEffect(load);
 
   async function add() {
-    setBusy(true);
+    setBusy('add');
     try {
       await addLocation({ code, name, kind });
       setCode('');
@@ -41,9 +54,9 @@ export default function MoreScreen() {
       load();
     } catch (e) {
       const msg = (e as Error).message;
-      Alert.alert('Could not add location', msg.includes('duplicate') ? 'That code is already used.' : msg);
+      Alert.alert('Could not add location', /duplicate|unique/i.test(msg) ? 'That code is already used.' : msg);
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
@@ -56,11 +69,56 @@ export default function MoreScreen() {
     }
   }
 
+  async function saveTeamName() {
+    if (!team) return;
+    setBusy('team');
+    try {
+      await renameTeam(team.id, teamName);
+      load();
+    } catch (e) {
+      Alert.alert('Could not rename team', (e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function deleteTeam() {
+    setBusy('delete');
+    try {
+      await manageUser({ action: 'delete_team', confirm_name: confirmName.trim() });
+      // The account no longer exists; clear the local session.
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch (e) {
+      Alert.alert('Could not delete', (e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const validCode = /^[A-Z0-9_-]{1,12}$/.test(code.trim().toUpperCase());
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.pad} keyboardShouldPersistTaps="handled">
-      <Text style={styles.title}>Locations</Text>
+      <Text style={styles.title}>Team</Text>
+      <Card style={{ gap: 10 }}>
+        {isLeader ? (
+          <>
+            <Field label="Team name" value={teamName} onChangeText={setTeamName} maxLength={60} />
+            {teamName.trim() !== (team?.name ?? '') && (
+              <Button
+                title="Save team name"
+                onPress={saveTeamName}
+                loading={busy === 'team'}
+                disabled={!teamName.trim() || !!busy}
+              />
+            )}
+          </>
+        ) : (
+          <Text style={styles.title}>{team?.name ?? '…'}</Text>
+        )}
+      </Card>
+
+      <Text style={[styles.title, { marginTop: 12 }]}>Locations</Text>
       {locations.map((l) => (
         <Card key={l.id} style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View style={{ flex: 1 }}>
@@ -89,19 +147,56 @@ export default function MoreScreen() {
               <Chip key={k.kind} label={k.label} active={kind === k.kind} onPress={() => setKind(k.kind)} />
             ))}
           </View>
-          <Button title="Add location" onPress={add} loading={busy} disabled={!validCode || !name.trim()} />
+          <Button
+            title="Add location"
+            onPress={add}
+            loading={busy === 'add'}
+            disabled={!validCode || !name.trim() || !!busy}
+          />
         </Card>
       )}
 
       <Text style={[styles.title, { marginTop: 12 }]}>Account</Text>
       <Card>
-        <Text style={styles.title}>{profile?.display_name || profile?.user_code || 'Owner'}</Text>
+        <Text style={styles.title}>{profile?.display_name || profile?.user_code || 'Team Leader'}</Text>
         <Text style={styles.muted}>
-          {profile?.user_code ? `User ID: ${profile.user_code}` : 'Signs in with email'}
+          {profile?.user_code
+            ? `UserID: ${profile.user_code}${profile.username ? `  ·  Username: ${profile.username}` : ''}`
+            : 'Signs in with email'}
           {role ? `  ·  ${ROLE_LABEL[role]}` : ''}
         </Text>
         <Button title="Sign out" variant="outline" color={colors.out} onPress={signOut} />
       </Card>
+
+      {isLeader && (
+        <Card style={{ gap: 10, marginTop: 12, borderColor: colors.out }}>
+          <Text style={[styles.title, { color: colors.out }]}>Delete team & account</Text>
+          {!showDelete ? (
+            <Button title="Delete team…" variant="outline" color={colors.out} onPress={() => setShowDelete(true)} />
+          ) : (
+            <>
+              <Text style={{ color: colors.text }}>
+                This permanently deletes your account, every member account, and all products, stock and history of this
+                team. It cannot be undone.
+              </Text>
+              <Field
+                label={`Type the team name (${team?.name ?? ''}) to confirm`}
+                value={confirmName}
+                onChangeText={setConfirmName}
+                autoCapitalize="none"
+              />
+              <Button
+                title="Delete everything"
+                color={colors.out}
+                onPress={deleteTeam}
+                loading={busy === 'delete'}
+                disabled={confirmName.trim() !== team?.name || !!busy}
+              />
+              <Button title="Cancel" variant="outline" color={colors.muted} onPress={() => setShowDelete(false)} />
+            </>
+          )}
+        </Card>
+      )}
     </ScrollView>
   );
 }

@@ -76,9 +76,10 @@ export default function TeamScreen() {
           >
             <View style={[dot, { backgroundColor: item.online ? colors.online : colors.border }]} />
             <View style={{ flex: 1, gap: 2 }}>
-              <Text style={styles.title}>{item.display_name || item.user_code || 'Owner'}</Text>
+              <Text style={styles.title}>{item.display_name || item.user_code || 'Team Leader'}</Text>
               <Text style={styles.muted}>
-                {item.user_code ? `@${item.user_code}` : 'email login'} · {ROLE_LABEL[item.role]}
+                {item.user_code ? `@${item.user_code}` : 'email login'}
+                {item.username ? ` / ${item.username}` : ''} · {ROLE_LABEL[item.role]}
                 {item.role === 'staff' ? (item.can_transfer ? ' · can transfer' : ' · no transfer') : ''}
                 {item.is_active ? '' : ' · disabled'}
               </Text>

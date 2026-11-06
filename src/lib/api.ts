@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import type { Role } from './roles';
-import type { Location, LocationKind, MovementKind, MovementRow, Product, StockRow, TeamMember } from './types';
+import type { Location, LocationKind, MovementKind, MovementRow, Product, StockRow, Team, TeamMember } from './types';
 
 function check<T>(res: { data: T | null; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message);
@@ -173,19 +173,30 @@ export async function getTeamMember(id: string): Promise<TeamMember> {
 }
 
 type ManageUserBody =
-  | { action: 'create'; user_code: string; display_name: string; role: Role; password: string; can_transfer: boolean }
+  | {
+      action: 'create';
+      user_code: string;
+      username: string;
+      display_name: string;
+      role: Role;
+      password: string;
+      can_transfer: boolean;
+    }
   | {
       action: 'update';
       user_id: string;
+      user_code?: string;
+      username?: string;
       display_name?: string;
       role?: Role;
       is_active?: boolean;
       can_transfer?: boolean;
     }
   | { action: 'set_password'; user_id: string; password: string }
-  | { action: 'delete'; user_id: string };
+  | { action: 'delete'; user_id: string }
+  | { action: 'delete_team'; confirm_name: string };
 
-/** Owner-only account changes, done by the "manage-users" Edge Function. */
+/** Team Leader-only account changes, done by the "manage-users" Edge Function. */
 export async function manageUser(body: ManageUserBody): Promise<{ ok: true; id?: string }> {
   const { data, error } = await supabase.functions.invoke('manage-users', { body });
   if (error) {
@@ -211,4 +222,27 @@ function escapeLike(s: string) {
 
 export function formatQty(n: number) {
   return Number.isInteger(n) ? String(n) : n.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+// Login & teams ---------------------------------------------------------------
+
+/** Turns what was typed in the login box (UserID, Username or email) into the Auth email. */
+export async function resolveLogin(identifier: string): Promise<string> {
+  const { data, error } = await supabase.rpc('resolve_login', { p_identifier: identifier });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
+export async function createTeam(teamName: string, displayName: string): Promise<string> {
+  const { data, error } = await supabase.rpc('create_team', { p_team_name: teamName, p_display_name: displayName });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
+export async function getMyTeam(): Promise<Team | null> {
+  return check(await supabase.from('teams').select('id, name').maybeSingle());
+}
+
+export async function renameTeam(id: string, name: string) {
+  check(await supabase.from('teams').update({ name: name.trim() }).eq('id', id));
 }

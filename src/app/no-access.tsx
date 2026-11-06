@@ -19,8 +19,8 @@ export default function NoAccess() {
           {profileError
             ? `Could not load your account: ${profileError}`
             : disabled
-              ? 'The Owner has disabled this account.'
-              : 'This account has no role. Ask the Owner to give you a User ID.'}
+              ? 'Your Team Leader has disabled this account.'
+              : 'This account is not part of a team. Ask your Team Leader for a UserID.'}
         </Text>
         <Button title="Try again" onPress={reloadProfile} />
         <Button title="Sign out" variant="outline" color={colors.out} onPress={signOut} />

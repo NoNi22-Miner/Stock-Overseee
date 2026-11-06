@@ -1,14 +1,7 @@
 export type Role = 'owner' | 'oversee' | 'staff' | 'onlooker';
 
-/** Staff accounts sign in with a User ID; Auth stores it as <userid>@LOGIN_DOMAIN. */
-export const LOGIN_DOMAIN = 'users.stock-overseee.invalid';
-
-export function userIdToEmail(userId: string) {
-  return `${userId.trim().toLowerCase()}@${LOGIN_DOMAIN}`;
-}
-
 export const ROLE_LABEL: Record<Role, string> = {
-  owner: 'Owner',
+  owner: 'Team Leader',
   oversee: 'Oversee',
   staff: 'Staff',
   onlooker: 'Onlooker',

@@ -61,4 +61,7 @@ export type TeamMember = {
   last_seen_at: string | null;
   online: boolean;
   created_at: string;
+  username: string | null;
 };
+
+export type Team = { id: string; name: string };

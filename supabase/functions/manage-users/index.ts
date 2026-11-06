@@ -1,10 +1,11 @@
-// Owner-only account management: create / update / reset password / delete.
-// Non-owner accounts sign in with a User ID, stored in Auth as <userid>@<LOGIN_DOMAIN>.
+// Team Leader account management for their own team:
+// create / update / reset password / delete a member, and delete the whole team.
+// Members sign in with a UserID or Username; their Auth email is <login_key>@<LOGIN_DOMAIN>.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const LOGIN_DOMAIN = 'users.stock-overseee.invalid';
 const ROLES = ['oversee', 'staff', 'onlooker'] as const;
-const USER_CODE = /^[a-z0-9._-]{3,32}$/;
+const LOGIN_NAME = /^[a-z0-9._-]{3,32}$/;
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -34,13 +35,17 @@ const admin = createClient(Deno.env.get('SUPABASE_URL')!, secretKey(), {
 });
 
 class HttpError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
     super(message);
   }
 }
 
 function checkRole(role: unknown) {
-  if (!ROLES.includes(role as (typeof ROLES)[number])) throw new HttpError(400, 'Role must be oversee, staff or onlooker');
+  if (!ROLES.includes(role as (typeof ROLES)[number]))
+    throw new HttpError(400, 'Role must be oversee, staff or onlooker');
   return role as string;
 }
 
@@ -49,12 +54,40 @@ function checkPassword(pw: unknown) {
   return pw;
 }
 
-async function getTarget(userId: unknown) {
+/** Normalised login name, or null when empty and optional. */
+function loginName(value: unknown, label: string, required: boolean): string | null {
+  const v = String(value ?? '')
+    .trim()
+    .toLowerCase();
+  if (!v) {
+    if (required) throw new HttpError(400, `${label} is required`);
+    return null;
+  }
+  if (!LOGIN_NAME.test(v))
+    throw new HttpError(400, `${label}: 3-32 characters, letters, numbers, dot, dash or underscore`);
+  return v;
+}
+
+async function ensureNamesFree(names: (string | null)[], exceptId?: string) {
+  const list = names.filter((n): n is string => !!n);
+  if (new Set(list).size !== list.length) throw new HttpError(400, 'UserID and Username must be different');
+  for (const n of list) {
+    const { data, error } = await admin.from('profiles').select('id').or(`user_code.eq.${n},username.eq.${n}`).limit(1);
+    if (error) throw new HttpError(500, error.message);
+    if (data?.length && data[0].id !== exceptId) throw new HttpError(409, `"${n}" is already taken`);
+  }
+}
+
+function friendly(message: string) {
+  return /already taken|duplicate key|unique/i.test(message) ? 'That UserID or Username is already taken' : message;
+}
+
+async function getMember(userId: unknown, teamId: string) {
   if (typeof userId !== 'string') throw new HttpError(400, 'Missing user_id');
-  const { data, error } = await admin.from('profiles').select('id, role').eq('id', userId).maybeSingle();
+  const { data, error } = await admin.from('profiles').select('id, role, team_id').eq('id', userId).maybeSingle();
   if (error) throw new HttpError(500, error.message);
-  if (!data) throw new HttpError(404, 'User not found');
-  return data as { id: string; role: string | null };
+  if (!data || data.team_id !== teamId) throw new HttpError(404, 'User not found');
+  return data as { id: string; role: string | null; team_id: string };
 }
 
 Deno.serve(async (req) => {
@@ -62,44 +95,47 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Use POST' }, 405);
 
   try {
-    // Who is calling? Must be the active owner.
+    // Caller must be the active Team Leader of a team.
     const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
     if (!token) throw new HttpError(401, 'Not signed in');
     const { data: auth, error: authErr } = await admin.auth.getUser(token);
     if (authErr || !auth.user) throw new HttpError(401, 'Not signed in');
-    const { data: me } = await admin.from('profiles').select('role, is_active').eq('id', auth.user.id).maybeSingle();
-    if (me?.role !== 'owner' || !me.is_active) throw new HttpError(403, 'Only the Owner can manage accounts');
+    const { data: me } = await admin
+      .from('profiles')
+      .select('role, is_active, team_id')
+      .eq('id', auth.user.id)
+      .maybeSingle();
+    if (me?.role !== 'owner' || !me.is_active || !me.team_id) {
+      throw new HttpError(403, 'Only the Team Leader can manage accounts');
+    }
+    const teamId: string = me.team_id;
 
     const body = await req.json().catch(() => ({}));
 
     switch (body.action) {
       case 'create': {
-        const code = String(body.user_code ?? '').trim().toLowerCase();
-        if (!USER_CODE.test(code)) {
-          throw new HttpError(400, 'User ID: 3-32 characters, letters, numbers, dot, dash or underscore');
-        }
+        const userCode = loginName(body.user_code, 'UserID', true)!;
+        const username = loginName(body.username, 'Username', false);
         const role = checkRole(body.role);
         const password = checkPassword(body.password);
         const displayName = String(body.display_name ?? '').trim();
+        await ensureNamesFree([userCode, username]);
 
-        const { data: taken } = await admin.from('profiles').select('id').eq('user_code', code).maybeSingle();
-        if (taken) throw new HttpError(409, 'That User ID is already taken');
-
+        const loginKey = crypto.randomUUID();
         const { data: created, error } = await admin.auth.admin.createUser({
-          email: `${code}@${LOGIN_DOMAIN}`,
+          email: `${loginKey}@${LOGIN_DOMAIN}`,
           password,
           email_confirm: true,
-          user_metadata: { user_code: code, display_name: displayName },
+          app_metadata: { managed: 'true' },
         });
-        if (error || !created.user) {
-          const msg = error?.message ?? 'Could not create user';
-          throw new HttpError(/already/i.test(msg) ? 409 : 400, /already/i.test(msg) ? 'That User ID is already taken' : msg);
-        }
+        if (error || !created.user) throw new HttpError(400, error?.message ?? 'Could not create user');
 
-        // The auth trigger made an empty profile; fill it in.
         const { error: profErr } = await admin.from('profiles').upsert({
           id: created.user.id,
-          user_code: code,
+          team_id: teamId,
+          user_code: userCode,
+          username,
+          login_key: loginKey,
           display_name: displayName,
           role,
           is_active: true,
@@ -107,20 +143,27 @@ Deno.serve(async (req) => {
         });
         if (profErr) {
           await admin.auth.admin.deleteUser(created.user.id);
-          throw new HttpError(500, profErr.message);
+          throw new HttpError(409, friendly(profErr.message));
         }
         return json({ ok: true, id: created.user.id });
       }
 
       case 'update': {
-        const target = await getTarget(body.user_id);
+        const target = await getMember(body.user_id, teamId);
         const patch: Record<string, unknown> = {};
         if (typeof body.display_name === 'string') patch.display_name = body.display_name.trim();
         if (target.role === 'owner') {
           if (body.role !== undefined || body.is_active !== undefined) {
-            throw new HttpError(400, "The Owner's role and status cannot be changed");
+            throw new HttpError(400, "The Team Leader's role and status cannot be changed");
           }
         } else {
+          if (body.user_code !== undefined || body.username !== undefined) {
+            const userCode = loginName(body.user_code, 'UserID', true);
+            const username = loginName(body.username, 'Username', false);
+            await ensureNamesFree([userCode, username], target.id);
+            patch.user_code = userCode;
+            patch.username = username;
+          }
           if (body.role !== undefined) patch.role = checkRole(body.role);
           if (typeof body.can_transfer === 'boolean') patch.can_transfer = body.can_transfer;
           if (typeof body.is_active === 'boolean') {
@@ -134,13 +177,13 @@ Deno.serve(async (req) => {
         }
         if (Object.keys(patch).length) {
           const { error } = await admin.from('profiles').update(patch).eq('id', target.id);
-          if (error) throw new HttpError(500, error.message);
+          if (error) throw new HttpError(409, friendly(error.message));
         }
         return json({ ok: true });
       }
 
       case 'set_password': {
-        const target = await getTarget(body.user_id);
+        const target = await getMember(body.user_id, teamId);
         const password = checkPassword(body.password);
         const { error } = await admin.auth.admin.updateUserById(target.id, { password });
         if (error) throw new HttpError(500, error.message);
@@ -148,9 +191,32 @@ Deno.serve(async (req) => {
       }
 
       case 'delete': {
-        const target = await getTarget(body.user_id);
-        if (target.role === 'owner') throw new HttpError(400, 'The Owner account cannot be deleted');
+        const target = await getMember(body.user_id, teamId);
+        if (target.role === 'owner') throw new HttpError(400, 'Use "Delete team" to remove the Team Leader account');
         const { error } = await admin.auth.admin.deleteUser(target.id);
+        if (error) throw new HttpError(500, error.message);
+        return json({ ok: true });
+      }
+
+      case 'delete_team': {
+        // Deletes every member account, all stock data, the team, and the Team Leader account.
+        const { data: team } = await admin.from('teams').select('name').eq('id', teamId).single();
+        if (String(body.confirm_name ?? '').trim() !== team?.name) {
+          throw new HttpError(400, 'Type the team name exactly to confirm');
+        }
+        const { data: members, error: mErr } = await admin.from('profiles').select('id').eq('team_id', teamId);
+        if (mErr) throw new HttpError(500, mErr.message);
+
+        for (const table of ['movements', 'stock_levels', 'products', 'locations']) {
+          const { error } = await admin.from(table).delete().eq('team_id', teamId);
+          if (error) throw new HttpError(500, error.message);
+        }
+        for (const m of members ?? []) {
+          if (m.id === auth.user.id) continue;
+          await admin.auth.admin.deleteUser(m.id);
+        }
+        await admin.from('teams').delete().eq('id', teamId);
+        const { error } = await admin.auth.admin.deleteUser(auth.user.id);
         if (error) throw new HttpError(500, error.message);
         return json({ ok: true });
       }

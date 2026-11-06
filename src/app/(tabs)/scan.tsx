@@ -227,7 +227,7 @@ export default function ScanScreen() {
                 onPress={() => router.push({ pathname: '/product/[id]', params: { id: 'new', barcode: lookedUp } })}
               />
             ) : (
-              <Text style={{ color: colors.text }}>Ask the Owner or an Oversee to register this product.</Text>
+              <Text style={{ color: colors.text }}>Ask your Team Leader or an Oversee to register this product.</Text>
             )}
           </Card>
         )}
