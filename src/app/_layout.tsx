@@ -1,11 +1,26 @@
-import { Stack } from 'expo-router';
+import * as Notifications from 'expo-notifications';
+import { router, Stack } from 'expo-router';
+import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
 import { AuthProvider, useAuth } from '../lib/auth';
+import { routeForNotification } from '../lib/push';
 import { colors } from '../lib/theme';
+
+/** Opens the transfer / product a tapped phone notification is about. */
+function useNotificationTaps(ready: boolean) {
+  const last = Notifications.useLastNotificationResponse();
+  useEffect(() => {
+    if (!ready || !last) return;
+    const route = routeForNotification(last.notification.request.content.data as Record<string, unknown>);
+    if (route) router.push(route as never);
+    Notifications.clearLastNotificationResponse();
+  }, [ready, last]);
+}
 
 function RootStack() {
   const { session, profile, loading } = useAuth();
+  useNotificationTaps(!loading && !!session && !!profile?.role && !!profile?.is_active);
 
   if (loading) {
     return (

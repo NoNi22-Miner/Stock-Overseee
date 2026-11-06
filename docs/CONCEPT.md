@@ -77,8 +77,8 @@ The people **responsible for a location** are the Team Leader plus every member 
 Nobody is notified about their own action.
 - ✅ **In-app Inbox** with an unread badge in the side menu. Tapping a notification opens the transfer
   or product.
-- 🔨 **Phone push notifications**, which also arrive when the app is closed. This needs a one-time free
-  Firebase setup.
+- ✅ **Phone push notifications**, which also arrive when the app is closed. The app and server are
+  ready; they start working after the one-time Firebase setup in [PUSH_SETUP.md](PUSH_SETUP.md).
 
 ## 7. Working without internet (🔨)
 
@@ -130,7 +130,7 @@ English and Bahasa Indonesia. The app follows the phone's language; it can be ch
 ## 12. Build order
 
 1. ✅ Categories, location access, transfers in transit, in-app notifications.
-1. **Phone push notifications** (needs the Firebase setup).
+1. **Phone push**: finish the Firebase setup ([PUSH_SETUP.md](PUSH_SETUP.md)), then a test APK.
 2. **Offline queue** (local copy, queue, sync, failed-scan handling).
 3. **Excel / PDF export.**
 4. **Bahasa Indonesia.**
@@ -143,7 +143,7 @@ English and Bahasa Indonesia. The app follows the phone's language; it can be ch
   `all_locations`, `notify_changes`.
 - `member_locations` — which locations a member may use.
 - `transfers` — sent / received / returned / arrived late / lost quantities and status.
-- `notifications` — per-person inbox.
+- `notifications` — per-person inbox; `push_tokens` — registered phones.
 - `locations`, `products` (with `category_id`), `categories` — all per team.
 - `stock_levels` — quantity per product per location.
 - `movements` — log of In / Out / Transfer / Adjust with who did it. 🔨 + `client_id` (offline

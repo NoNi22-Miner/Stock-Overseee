@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
+import { registerForPush, unregisterPush, watchPushToken } from './push';
 import type { Role } from './roles';
 import { supabase } from './supabase';
 
@@ -125,7 +126,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [active, userId]);
 
+  // Register this phone for push notifications once the member is signed in.
+  useEffect(() => {
+    if (!active) return;
+    registerForPush();
+    return watchPushToken();
+  }, [active, userId]);
+
   const signOut = useCallback(async () => {
+    await unregisterPush();
     try {
       await supabase.rpc('touch_presence', { p_online: false });
     } catch {

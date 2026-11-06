@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import * as Notifications from 'expo-notifications';
 import { AppState } from 'react-native';
 import { unreadNotificationCount } from './api';
 
@@ -27,8 +28,11 @@ export function UnreadProvider({ children }: { children: ReactNode }) {
         timer = null;
       }
     });
+    // A push arriving while the app is open updates the badge at once.
+    const pushSub = Notifications.addNotificationReceivedListener(() => refresh());
     return () => {
       sub.remove();
+      pushSub.remove();
       if (timer) clearInterval(timer);
     };
   }, [refresh]);
