@@ -2,7 +2,15 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Alert, ScrollView, Switch, Text, View } from 'react-native';
 import { Button, Card, Chip, Field, styles } from '../../components/ui';
-import { addLocation, getMyTeam, listLocations, manageUser, renameTeam, setLocationActive } from '../../lib/api';
+import {
+  addLocation,
+  getMyTeam,
+  listLocations,
+  manageUser,
+  renameTeam,
+  setLocationActive,
+  setNotifyChanges,
+} from '../../lib/api';
 import { useAuth, useRole } from '../../lib/auth';
 import { can, ROLE_LABEL } from '../../lib/roles';
 import { supabase } from '../../lib/supabase';
@@ -16,7 +24,8 @@ const KINDS: { kind: LocationKind; label: string }[] = [
 ];
 
 export default function MoreScreen() {
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, reloadProfile } = useAuth();
+  const [notifyChanges, setNotifyChangesState] = useState(profile?.notify_changes ?? true);
   const role = useRole();
   const manage = can.manageLocations(role);
   const isLeader = can.manageUsers(role);
@@ -166,6 +175,28 @@ export default function MoreScreen() {
           {role ? `  ·  ${ROLE_LABEL[role]}` : ''}
         </Text>
         <Button title="Sign out" variant="outline" color={colors.out} onPress={signOut} />
+      </Card>
+
+      <Text style={[styles.title, { marginTop: 12 }]}>Notifications</Text>
+      <Card style={{ gap: 6 }}>
+        <View style={[styles.row, { justifyContent: 'space-between' }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.text, fontSize: 16 }}>Every stock change</Text>
+            <Text style={styles.muted}>
+              In / Out / count at my locations. Transfers and low stock are always notified.
+            </Text>
+          </View>
+          <Switch
+            value={notifyChanges}
+            onValueChange={(on) => {
+              setNotifyChangesState(on);
+              setNotifyChanges(on).then(reloadProfile, (e) => {
+                setNotifyChangesState(!on);
+                Alert.alert('Could not save', e.message);
+              });
+            }}
+          />
+        </View>
       </Card>
 
       {isLeader && (

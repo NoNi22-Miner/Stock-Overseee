@@ -78,6 +78,31 @@ async function ensureNamesFree(names: (string | null)[], exceptId?: string) {
   }
 }
 
+/** Location access: all locations, or a list of this team's location ids. */
+async function checkLocations(body: { all_locations?: unknown; location_ids?: unknown }, teamId: string) {
+  const all = body.all_locations !== false;
+  if (all) return { all, ids: [] as string[] };
+  const ids = Array.isArray(body.location_ids) ? [...new Set(body.location_ids.map(String))] : [];
+  if (!ids.length) throw new HttpError(400, 'Pick at least one location, or All locations');
+  const { data, error } = await admin.from('locations').select('id').eq('team_id', teamId).in('id', ids);
+  if (error) throw new HttpError(500, error.message);
+  if ((data ?? []).length !== ids.length) throw new HttpError(400, 'Unknown location');
+  return { all, ids };
+}
+
+async function setLocations(profileId: string, teamId: string, loc: { all: boolean; ids: string[] }) {
+  const { error: delErr } = await admin.from('member_locations').delete().eq('profile_id', profileId);
+  if (delErr) throw new HttpError(500, delErr.message);
+  if (!loc.all && loc.ids.length) {
+    const { error } = await admin
+      .from('member_locations')
+      .insert(loc.ids.map((location_id) => ({ profile_id: profileId, location_id, team_id: teamId })));
+    if (error) throw new HttpError(500, error.message);
+  }
+  const { error } = await admin.from('profiles').update({ all_locations: loc.all }).eq('id', profileId);
+  if (error) throw new HttpError(500, error.message);
+}
+
 function friendly(message: string) {
   return /already taken|duplicate key|unique/i.test(message) ? 'That UserID or Username is already taken' : message;
 }
@@ -119,6 +144,7 @@ Deno.serve(async (req) => {
         const role = checkRole(body.role);
         const password = checkPassword(body.password);
         const displayName = String(body.display_name ?? '').trim();
+        const locations = await checkLocations(body, teamId);
         await ensureNamesFree([userCode, username]);
 
         const loginKey = crypto.randomUUID();
@@ -144,6 +170,12 @@ Deno.serve(async (req) => {
         if (profErr) {
           await admin.auth.admin.deleteUser(created.user.id);
           throw new HttpError(409, friendly(profErr.message));
+        }
+        try {
+          await setLocations(created.user.id, teamId, locations);
+        } catch (e) {
+          await admin.auth.admin.deleteUser(created.user.id);
+          throw e;
         }
         return json({ ok: true, id: created.user.id });
       }
@@ -179,6 +211,9 @@ Deno.serve(async (req) => {
           const { error } = await admin.from('profiles').update(patch).eq('id', target.id);
           if (error) throw new HttpError(409, friendly(error.message));
         }
+        if (target.role !== 'owner' && (body.all_locations !== undefined || body.location_ids !== undefined)) {
+          await setLocations(target.id, teamId, await checkLocations(body, teamId));
+        }
         return json({ ok: true });
       }
 
@@ -207,7 +242,7 @@ Deno.serve(async (req) => {
         const { data: members, error: mErr } = await admin.from('profiles').select('id').eq('team_id', teamId);
         if (mErr) throw new HttpError(500, mErr.message);
 
-        for (const table of ['movements', 'stock_levels', 'products', 'locations']) {
+        for (const table of ['movements', 'transfers', 'notifications', 'stock_levels', 'products', 'locations']) {
           const { error } = await admin.from(table).delete().eq('team_id', teamId);
           if (error) throw new HttpError(500, error.message);
         }

@@ -9,8 +9,10 @@ import type {
   MovementRow,
   Product,
   StockRow,
+  AppNotification,
   Team,
   TeamMember,
+  Transfer,
 } from './types';
 
 function check<T>(res: { data: T | null; error: { message: string } | null }): T {
@@ -192,6 +194,8 @@ type ManageUserBody =
       role: Role;
       password: string;
       can_transfer: boolean;
+      all_locations: boolean;
+      location_ids: string[];
     }
   | {
       action: 'update';
@@ -202,6 +206,8 @@ type ManageUserBody =
       role?: Role;
       is_active?: boolean;
       can_transfer?: boolean;
+      all_locations?: boolean;
+      location_ids?: string[];
     }
   | { action: 'set_password'; user_id: string; password: string }
   | { action: 'delete'; user_id: string }
@@ -284,4 +290,98 @@ export async function renameCategory(id: string, name: string) {
 export async function deleteCategory(id: string) {
   const { error } = await supabase.from('categories').delete().eq('id', id);
   categoryError(error);
+}
+
+// Location access ----------------------------------------------------------------
+
+/** Locations the signed-in member may use (all of them for the Team Leader). */
+export async function myLocationIds(): Promise<string[]> {
+  const { data, error } = await supabase.rpc('my_location_ids');
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as (string | { my_location_ids: string })[]).map((r) =>
+    typeof r === 'string' ? r : r.my_location_ids,
+  );
+}
+
+// Transfers ------------------------------------------------------------------------
+
+const num = (v: unknown) => (v == null ? null : Number(v));
+
+function normalizeTransfer(t: Transfer): Transfer {
+  return {
+    ...t,
+    qty_sent: Number(t.qty_sent),
+    qty_received: num(t.qty_received),
+    qty_returned: Number(t.qty_returned),
+    qty_late: Number(t.qty_late),
+    qty_lost: Number(t.qty_lost),
+    qty_open: Number(t.qty_open),
+  };
+}
+
+export async function listTransfers(opts: { status?: Transfer['status'][]; limit?: number } = {}) {
+  let q = supabase
+    .from('transfer_list')
+    .select('*')
+    .order('sent_at', { ascending: false })
+    .limit(opts.limit ?? 200);
+  if (opts.status?.length) q = q.in('status', opts.status);
+  return (check(await q) as Transfer[]).map(normalizeTransfer);
+}
+
+export async function getTransfer(id: string): Promise<Transfer> {
+  return normalizeTransfer(check(await supabase.from('transfer_list').select('*').eq('id', id).single()));
+}
+
+export async function receiveTransfer(id: string, qty: number, note?: string) {
+  const { error } = await supabase.rpc('receive_transfer', {
+    p_transfer_id: id,
+    p_qty_received: qty,
+    p_note: note ?? null,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export type ResolveOutcome = 'returned' | 'late' | 'lost';
+
+export async function resolveTransfer(id: string, outcome: ResolveOutcome, qty: number, note?: string) {
+  const { error } = await supabase.rpc('resolve_transfer', {
+    p_transfer_id: id,
+    p_outcome: outcome,
+    p_qty: qty,
+    p_note: note ?? null,
+  });
+  if (error) throw new Error(error.message);
+}
+
+// Notifications -----------------------------------------------------------------
+
+export async function listNotifications(limit = 100): Promise<AppNotification[]> {
+  return check(
+    await supabase
+      .from('notifications')
+      .select('id, kind, title, body, data, created_at, read_at')
+      .order('created_at', { ascending: false })
+      .limit(limit),
+  );
+}
+
+export async function unreadNotificationCount(): Promise<number> {
+  const { count, error } = await supabase
+    .from('notifications')
+    .select('id', { count: 'exact', head: true })
+    .is('read_at', null);
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+/** Mark the given notifications (or all when omitted) as read. */
+export async function markNotificationsRead(ids?: number[]) {
+  const { error } = await supabase.rpc('mark_notifications_read', { p_ids: ids ?? null });
+  if (error) throw new Error(error.message);
+}
+
+export async function setNotifyChanges(on: boolean) {
+  const { error } = await supabase.rpc('set_my_notify_changes', { p_on: on });
+  if (error) throw new Error(error.message);
 }

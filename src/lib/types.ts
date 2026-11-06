@@ -52,6 +52,56 @@ export type MovementRow = {
   qty_before: number | null;
   qty_after: number | null;
   actor_name: string | null;
+  transfer_id: string | null;
+  detail: 'receive' | 'return' | 'late' | null;
+};
+
+export type TransferStatus = 'in_transit' | 'short' | 'done';
+
+export type Transfer = {
+  id: string;
+  product_id: string;
+  product_name: string;
+  unit: string;
+  barcode: string;
+  from_location_id: string;
+  to_location_id: string;
+  from_code: string;
+  to_code: string;
+  qty_sent: number;
+  qty_received: number | null;
+  qty_returned: number;
+  qty_late: number;
+  qty_lost: number;
+  qty_open: number;
+  status: TransferStatus;
+  note: string | null;
+  receive_note: string | null;
+  sent_by: string | null;
+  sent_by_name: string | null;
+  sent_at: string;
+  received_by_name: string | null;
+  received_at: string | null;
+  resolved_by_name: string | null;
+  resolved_at: string | null;
+};
+
+export type NotificationKind =
+  | 'transfer_incoming'
+  | 'transfer_received'
+  | 'transfer_short'
+  | 'transfer_resolved'
+  | 'stock_change'
+  | 'low_stock';
+
+export type AppNotification = {
+  id: number;
+  kind: NotificationKind;
+  title: string;
+  body: string;
+  data: { transfer_id?: string; product_id?: string; location_id?: string; movement_id?: number };
+  created_at: string;
+  read_at: string | null;
 };
 
 export type TeamMember = {
@@ -65,6 +115,8 @@ export type TeamMember = {
   online: boolean;
   created_at: string;
   username: string | null;
+  all_locations: boolean;
+  location_ids: string[];
 };
 
 export type Team = { id: string; name: string };

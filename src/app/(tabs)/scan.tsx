@@ -12,7 +12,7 @@ import {
   recordMovement,
   stockForProduct,
 } from '../../lib/api';
-import { useAuth, useRole } from '../../lib/auth';
+import { useAuth, useLocationAccess, useRole } from '../../lib/auth';
 import { can } from '../../lib/roles';
 import { colors, kindColor } from '../../lib/theme';
 import type { Location, MovementKind, Product, StockRow } from '../../lib/types';
@@ -27,6 +27,7 @@ const MODES: { kind: MovementKind; label: string }[] = [
 export default function ScanScreen() {
   const role = useRole();
   const { profile } = useAuth();
+  const canUse = useLocationAccess();
   const modes = MODES.filter(
     (m) =>
       (m.kind !== 'ADJUST' || can.adjustStock(role)) &&
@@ -55,9 +56,14 @@ export default function ScanScreen() {
       listLocations()
         .then((locs) => {
           setLocations(locs);
-          const wrh = locs.find((l) => l.kind === 'warehouse') ?? locs[0];
-          const store = locs.find((l) => l.kind === 'store' && l.id !== wrh?.id) ?? locs.find((l) => l.id !== wrh?.id);
-          setFromId((cur) => (locs.some((l) => l.id === cur) ? cur : (wrh?.id ?? null)));
+          // Source must be one of my locations; a transfer may go to any location.
+          const own = locs.filter((l) => canUse(l.id));
+          const wrh = own.find((l) => l.kind === 'warehouse') ?? own[0];
+          const store =
+            own.find((l) => l.kind === 'store' && l.id !== wrh?.id) ??
+            locs.find((l) => l.kind === 'store' && l.id !== wrh?.id) ??
+            locs.find((l) => l.id !== wrh?.id);
+          setFromId((cur) => (own.some((l) => l.id === cur) ? cur : (wrh?.id ?? null)));
           setToId((cur) => (locs.some((l) => l.id === cur) ? cur : (store?.id ?? wrh?.id ?? null)));
         })
         .catch((e) => setMessage({ ok: false, text: e.message }));
@@ -98,6 +104,7 @@ export default function ScanScreen() {
     setNote('');
   }
 
+  const mine = locations.filter((l) => canUse(l.id));
   // Which side(s) each mode uses. ADJUST uses the "from" picker as its location.
   const isAdjust = mode === 'ADJUST';
   const usesFrom = mode === 'OUT' || mode === 'TRANSFER' || isAdjust;
@@ -110,6 +117,8 @@ export default function ScanScreen() {
 
   function chooseMode(k: MovementKind) {
     setMode(k);
+    // Stock In must go into one of my own locations.
+    if (k === 'IN' && !canUse(toId)) setToId(mine[0]?.id ?? null);
     setQty(k === 'ADJUST' ? formatQty(currentAt(fromId)) : '1');
   }
 
@@ -136,7 +145,7 @@ export default function ScanScreen() {
       ? `In ${formatQty(qtyNum || 0)} → ${toLoc?.code ?? '?'}`
       : mode === 'OUT'
         ? `Out ${formatQty(qtyNum || 0)} ← ${fromLoc?.code ?? '?'}`
-        : `Move ${formatQty(qtyNum || 0)}  ${fromLoc?.code ?? '?'} → ${toLoc?.code ?? '?'}`;
+        : `Send ${formatQty(qtyNum || 0)}  ${fromLoc?.code ?? '?'} → ${toLoc?.code ?? '?'}`;
 
   async function submit() {
     if (!product || problem) return;
@@ -154,7 +163,13 @@ export default function ScanScreen() {
           note,
         });
       }
-      setMessage({ ok: true, text: `Saved: ${product.name} — ${summary} ${product.unit}` });
+      setMessage({
+        ok: true,
+        text:
+          mode === 'TRANSFER'
+            ? `Sent: ${product.name} — ${summary} ${product.unit}. Waiting for ${toLoc?.code} to receive it.`
+            : `Saved: ${product.name} — ${summary} ${product.unit}`,
+      });
       reset();
     } catch (e) {
       setMessage({ ok: false, text: (e as Error).message });
@@ -183,7 +198,7 @@ export default function ScanScreen() {
         {usesFrom && (
           <LocationPicker
             label={isAdjust ? 'Location to count' : mode === 'TRANSFER' ? 'From' : 'Take out of'}
-            locations={locations}
+            locations={mine}
             value={fromId}
             onChange={chooseFrom}
           />
@@ -191,7 +206,7 @@ export default function ScanScreen() {
         {usesTo && (
           <LocationPicker
             label={mode === 'TRANSFER' ? 'To' : 'Put into'}
-            locations={locations}
+            locations={mode === 'TRANSFER' ? locations : mine}
             value={toId}
             onChange={setToId}
             exclude={mode === 'TRANSFER' ? fromId : null}
@@ -237,7 +252,7 @@ export default function ScanScreen() {
             <Text style={styles.title}>{product.name}</Text>
             <Text style={styles.muted}>{product.barcode}</Text>
             <View style={[styles.chipRow, { marginTop: 4 }]}>
-              {locations.map((l) => {
+              {mine.map((l) => {
                 const r = stock.find((s) => s.location_id === l.id);
                 return (
                   <Text key={l.id} style={{ color: r?.is_low ? colors.warn : colors.text }}>

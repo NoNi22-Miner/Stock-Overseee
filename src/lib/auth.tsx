@@ -13,6 +13,8 @@ export type Profile = {
   can_transfer: boolean;
   team_id: string | null;
   username: string | null;
+  all_locations: boolean;
+  notify_changes: boolean;
 };
 
 type AuthState = {
@@ -20,6 +22,8 @@ type AuthState = {
   profile: Profile | null;
   loading: boolean;
   profileError: string | null;
+  /** Locations this member may use (every team location for the Team Leader). */
+  myLocations: string[];
   reloadProfile: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -29,6 +33,7 @@ const AuthContext = createContext<AuthState>({
   profile: null,
   loading: true,
   profileError: null,
+  myLocations: [],
   reloadProfile: async () => {},
   signOut: async () => {},
 });
@@ -48,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   // Which user the current profile was loaded for (null = not loaded yet).
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  const [myLocations, setMyLocations] = useState<string[]>([]);
   const [profileError, setProfileError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -72,11 +78,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfileError(null);
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, user_code, display_name, role, is_active, can_transfer, team_id, username')
+      .select(
+        'id, user_code, display_name, role, is_active, can_transfer, team_id, username, all_locations, notify_changes',
+      )
       .eq('id', userId)
       .maybeSingle();
     if (error) setProfileError(error.message);
-    setProfile((data as Profile | null) ?? null);
+    const p = (data as Profile | null) ?? null;
+    if (p?.role && p.is_active) {
+      const { data: ids } = await supabase.rpc('my_location_ids');
+      setMyLocations(
+        ((ids ?? []) as (string | { my_location_ids: string })[]).map((r) =>
+          typeof r === 'string' ? r : r.my_location_ids,
+        ),
+      );
+    } else {
+      setMyLocations([]);
+    }
+    setProfile(p);
     setLoadedFor(userId);
   }, [userId]);
 
@@ -119,7 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loading = sessionLoading || (!!userId && loadedFor !== userId);
 
   return (
-    <AuthContext.Provider value={{ session, profile, loading, profileError, reloadProfile, signOut }}>
+    <AuthContext.Provider value={{ session, profile, loading, profileError, myLocations, reloadProfile, signOut }}>
       {children}
     </AuthContext.Provider>
   );
@@ -130,4 +149,11 @@ export const useAuth = () => useContext(AuthContext);
 export function useRole(): Role | null {
   const { profile } = useAuth();
   return profile?.is_active ? profile.role : null;
+}
+
+/** Whether the signed-in member may use a location (Team Leader / "All locations" = every one). */
+export function useLocationAccess(): (locationId: string | null | undefined) => boolean {
+  const { profile, myLocations } = useAuth();
+  const all = profile?.role === 'owner' || !!profile?.all_locations;
+  return (id) => !!id && (all || myLocations.includes(id));
 }

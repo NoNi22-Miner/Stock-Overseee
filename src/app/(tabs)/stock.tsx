@@ -4,10 +4,12 @@ import { FlatList, Pressable, RefreshControl, Text, TextInput, View } from 'reac
 import { LocationPicker } from '../../components/LocationPicker';
 import { Chip, Empty, styles } from '../../components/ui';
 import { formatQty, listLocations, lowStockCounts, stockAtLocation } from '../../lib/api';
+import { useLocationAccess } from '../../lib/auth';
 import { colors } from '../../lib/theme';
 import type { Location, StockRow } from '../../lib/types';
 
 export default function StockScreen() {
+  const canUse = useLocationAccess();
   const [locations, setLocations] = useState<Location[]>([]);
   const [locationId, setLocationId] = useState<string | null>(null);
   const [rows, setRows] = useState<StockRow[]>([]);
@@ -21,7 +23,7 @@ export default function StockScreen() {
     setLoading(true);
     setError(null);
     try {
-      const locs = await listLocations();
+      const locs = (await listLocations()).filter((l) => canUse(l.id));
       setLocations(locs);
       const current = locs.find((l) => l.id === locationId)?.id ?? locs[0]?.id ?? null;
       setLocationId(current);
@@ -47,20 +49,14 @@ export default function StockScreen() {
   const q = search.trim().toLowerCase();
   const shown = rows.filter(
     (r) =>
-      (!lowOnly || r.is_low) &&
-      (!q || r.product_name.toLowerCase().includes(q) || r.barcode.toLowerCase().includes(q)),
+      (!lowOnly || r.is_low) && (!q || r.product_name.toLowerCase().includes(q) || r.barcode.toLowerCase().includes(q)),
   );
-  const lowHere = locationId ? lowCounts[locationId] ?? 0 : 0;
+  const lowHere = locationId ? (lowCounts[locationId] ?? 0) : 0;
 
   return (
     <View style={styles.screen}>
       <View style={[styles.pad, { paddingBottom: 4 }]}>
-        <LocationPicker
-          locations={locations}
-          value={locationId}
-          onChange={setLocationId}
-          badges={lowCounts}
-        />
+        <LocationPicker locations={locations} value={locationId} onChange={setLocationId} badges={lowCounts} />
         <TextInput
           style={styles.input}
           placeholder="Search name or barcode"

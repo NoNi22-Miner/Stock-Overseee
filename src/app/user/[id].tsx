@@ -2,12 +2,12 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, Switch, Text, View } from 'react-native';
 import { Button, Card, Chip, Field, styles } from '../../components/ui';
-import { getTeamMember, manageUser } from '../../lib/api';
+import { getTeamMember, listLocations, manageUser } from '../../lib/api';
 import { useRole } from '../../lib/auth';
 import { can, ROLE_INFO, ROLE_LABEL, type Role } from '../../lib/roles';
 import { colors } from '../../lib/theme';
 import { timeAgo } from '../../lib/time';
-import type { TeamMember } from '../../lib/types';
+import type { Location, TeamMember } from '../../lib/types';
 
 const ASSIGNABLE: Exclude<Role, 'owner'>[] = ['oversee', 'staff', 'onlooker'];
 const USER_CODE = /^[a-z0-9._-]{3,32}$/;
@@ -25,9 +25,18 @@ export default function UserScreen() {
   const [role, setRole] = useState<Role>('staff');
   const [active, setActive] = useState(true);
   const [canTransfer, setCanTransfer] = useState(true);
+  const [allLocations, setAllLocations] = useState(true);
+  const [locationIds, setLocationIds] = useState<string[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    listLocations()
+      .then(setLocations)
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (isNew) return;
@@ -40,6 +49,8 @@ export default function UserScreen() {
         setRole(m.role);
         setActive(m.is_active);
         setCanTransfer(m.can_transfer);
+        setAllLocations(m.all_locations);
+        setLocationIds(m.location_ids ?? []);
       })
       .catch((e) => Alert.alert('Error', e.message))
       .finally(() => setLoading(false));
@@ -90,6 +101,8 @@ export default function UserScreen() {
         role,
         password,
         can_transfer: canTransfer,
+        all_locations: allLocations,
+        location_ids: allLocations ? [] : locationIds,
       }),
     );
     if (ok) {
@@ -109,7 +122,15 @@ export default function UserScreen() {
         display_name: name,
         ...(isOwnerAccount
           ? {}
-          : { user_code: code, username: uname, role, is_active: active, can_transfer: canTransfer }),
+          : {
+              user_code: code,
+              username: uname,
+              role,
+              is_active: active,
+              can_transfer: canTransfer,
+              all_locations: allLocations,
+              location_ids: allLocations ? [] : locationIds,
+            }),
       }),
     );
     if (ok) router.back();
@@ -195,6 +216,35 @@ export default function UserScreen() {
               <Switch value={canTransfer} onValueChange={setCanTransfer} />
             </View>
           )}
+
+          <Text style={[styles.label, { marginTop: 8 }]}>Locations</Text>
+          <View style={[styles.row, { justifyContent: 'space-between' }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.text, fontSize: 16 }}>All locations</Text>
+              <Text style={styles.muted}>Off = only the locations picked below</Text>
+            </View>
+            <Switch value={allLocations} onValueChange={setAllLocations} />
+          </View>
+          {!allLocations && (
+            <>
+              <View style={styles.chipRow}>
+                {locations.map((l) => (
+                  <Chip
+                    key={l.id}
+                    label={l.code}
+                    active={locationIds.includes(l.id)}
+                    onPress={() =>
+                      setLocationIds((ids) => (ids.includes(l.id) ? ids.filter((x) => x !== l.id) : [...ids, l.id]))
+                    }
+                  />
+                ))}
+              </View>
+              <Text style={styles.muted}>
+                They see stock and history only for these locations, and get their notifications. They can still send
+                transfers to any location.
+              </Text>
+            </>
+          )}
         </View>
       )}
 
@@ -217,7 +267,7 @@ export default function UserScreen() {
             title="Create account"
             onPress={create}
             loading={busy === 'create'}
-            disabled={!namesValid || password.length < 6 || !!busy}
+            disabled={!namesValid || password.length < 6 || (!allLocations && !locationIds.length) || !!busy}
           />
         </>
       ) : (
@@ -235,7 +285,7 @@ export default function UserScreen() {
             title="Save changes"
             onPress={save}
             loading={busy === 'save'}
-            disabled={!!busy || (!isOwnerAccount && !namesValid)}
+            disabled={!!busy || (!isOwnerAccount && (!namesValid || (!allLocations && !locationIds.length)))}
           />
 
           <Card style={{ gap: 10, marginTop: 12 }}>

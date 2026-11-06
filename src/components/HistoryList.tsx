@@ -6,9 +6,12 @@ import { styles } from './ui';
 
 export function describeMove(m: MovementRow) {
   if (m.kind === 'ADJUST') return `ADJUST ${m.to_code ?? m.from_code}`;
+  if (m.kind === 'IN' && m.detail === 'receive') return `RECEIVED → ${m.to_code}`;
+  if (m.kind === 'IN' && m.detail === 'return') return `RETURNED → ${m.to_code}`;
+  if (m.kind === 'IN' && m.detail === 'late') return `ARRIVED LATE → ${m.to_code}`;
   if (m.kind === 'IN') return `IN → ${m.to_code}`;
   if (m.kind === 'OUT') return `OUT ← ${m.from_code}`;
-  return `${m.from_code} → ${m.to_code}`;
+  return `SENT ${m.from_code} → ${m.to_code}`;
 }
 
 export function HistoryItem({ item, showProduct = true }: { item: MovementRow; showProduct?: boolean }) {

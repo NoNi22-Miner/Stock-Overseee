@@ -78,10 +78,7 @@ export function Chip({
   badge?: number;
 }) {
   return (
-    <Pressable
-      onPress={onPress}
-      style={[styles.chip, { borderColor: color }, active && { backgroundColor: color }]}
-    >
+    <Pressable onPress={onPress} style={[styles.chip, { borderColor: color }, active && { backgroundColor: color }]}>
       <Text style={[styles.chipText, { color: active ? colors.primaryText : color }]}>{label}</Text>
       {!!badge && (
         <View style={styles.badge}>

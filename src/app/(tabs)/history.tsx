@@ -4,12 +4,14 @@ import { FlatList, RefreshControl, Text, View } from 'react-native';
 import { HistoryItem } from '../../components/HistoryList';
 import { Chip, Empty, styles } from '../../components/ui';
 import { listHistory, listLocations } from '../../lib/api';
+import { useLocationAccess } from '../../lib/auth';
 import { colors, kindColor } from '../../lib/theme';
 import type { Location, MovementKind, MovementRow } from '../../lib/types';
 
 const KINDS: MovementKind[] = ['IN', 'OUT', 'TRANSFER', 'ADJUST'];
 
 export default function HistoryScreen() {
+  const canUse = useLocationAccess();
   const [locations, setLocations] = useState<Location[]>([]);
   const [locationId, setLocationId] = useState<string | null>(null);
   const [kind, setKind] = useState<MovementKind | null>(null);
@@ -22,7 +24,7 @@ export default function HistoryScreen() {
     setError(null);
     try {
       const [locs, hist] = await Promise.all([listLocations(true), listHistory({ locationId, kind })]);
-      setLocations(locs);
+      setLocations(locs.filter((l) => canUse(l.id)));
       setRows(hist);
     } catch (e) {
       setError((e as Error).message);
@@ -64,8 +66,7 @@ export default function HistoryScreen() {
         keyExtractor={(m) => String(m.id)}
         contentContainerStyle={{ padding: 16, paddingTop: 8, gap: 8 }}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
-        ListEmptyComponent={
-          loading ? undefined : <Empty text="No movements yet." />}
+        ListEmptyComponent={loading ? undefined : <Empty text="No movements yet." />}
         renderItem={({ item }) => <HistoryItem item={item} />}
       />
     </View>
