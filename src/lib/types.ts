@@ -41,6 +41,7 @@ export type MovementRow = {
   qty: number;
   note: string | null;
   created_at: string;
+  created_by: string | null;
   product_id: string;
   product_name: string;
   barcode: string;

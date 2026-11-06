@@ -1,17 +1,30 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+  type LayoutChangeEvent,
+  type ScrollViewInstance,
+} from 'react-native';
 import { BarcodeScanner } from '../../components/BarcodeScanner';
 import { LocationPicker } from '../../components/LocationPicker';
+import { RecentMoves, isRepeatable, type RecentFilter } from '../../components/RecentMoves';
+import { describeMove } from '../../components/HistoryList';
 import { Button, Card, Chip, Field, styles } from '../../components/ui';
-import { formatQty, listLocations, listMyStock, listProducts, recordAdjustment } from '../../lib/api';
+import { formatQty, listHistory, listLocations, listMyStock, listProducts, recordAdjustment } from '../../lib/api';
 import { useAuth, useLocationAccess, useRole } from '../../lib/auth';
 import { isConfident, matchProducts, type ProductMatch } from '../../lib/match';
 import { cached, submitScan, useOnline, useQueue } from '../../lib/offline';
 import { can } from '../../lib/roles';
 import { colors, kindColor } from '../../lib/theme';
 import { timeAgo } from '../../lib/time';
-import type { Location, MovementKind, Product, StockRow } from '../../lib/types';
+import type { Location, MovementKind, MovementRow, Product, StockRow } from '../../lib/types';
 
 const MODES: { kind: MovementKind; label: string }[] = [
   { kind: 'IN', label: 'Stock In' },
@@ -22,7 +35,7 @@ const MODES: { kind: MovementKind; label: string }[] = [
 
 export default function ScanScreen() {
   const role = useRole();
-  const { profile } = useAuth();
+  const { profile, session } = useAuth();
   const canUse = useLocationAccess();
   const online = useOnline();
   const queue = useQueue();
@@ -52,9 +65,28 @@ export default function ScanScreen() {
   const [qty, setQty] = useState('1');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const [recent, setRecent] = useState<MovementRow[]>([]);
+  const [recentFromCache, setRecentFromCache] = useState(false);
+  const [recentLoading, setRecentLoading] = useState(false);
+  const [recentFilter, setRecentFilter] = useState<RecentFilter>('all');
+  const [width, setWidth] = useState(0);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   // Text that found nothing; looked up again when coming back from "Register product".
   const unknownCode = useRef<string | null>(null);
+
+  const loadRecent = useCallback(async () => {
+    setRecentLoading(true);
+    try {
+      const r = await cached('recent', () => listHistory({ limit: 40 }));
+      setRecent(r.value);
+      setRecentFromCache(r.fromCache);
+    } catch {
+      // keep what is shown
+    } finally {
+      setRecentLoading(false);
+    }
+  }, []);
 
   const loadStock = useCallback(async () => {
     const s = await cached('stock', listMyStock);
@@ -84,6 +116,7 @@ export default function ScanScreen() {
           setFromId((cur) => (own.some((l) => l.id === cur) ? cur : (wrh?.id ?? null)));
           setToId((cur) => (list.some((l) => l.id === cur) ? cur : (store?.id ?? wrh?.id ?? null)));
           await loadStock();
+          loadRecent();
           if (unknownCode.current) findText([unknownCode.current], prods.value);
         } catch (e) {
           setMessage({ ok: false, text: (e as Error).message });
@@ -227,6 +260,7 @@ export default function ScanScreen() {
       }
       reset();
       loadStock().catch(() => {});
+      loadRecent();
     } catch (e) {
       setMessage({ ok: false, text: (e as Error).message });
     } finally {
@@ -235,13 +269,129 @@ export default function ScanScreen() {
   }
 
   const step = (d: number) => setQty(String(Math.max(0, (Number(qty) || 0) + d)));
+  /** Can this move be done again as it was, by me? */
+  function canRedo(m: MovementRow) {
+    if (!isRepeatable(m) || !modes.some((x) => x.kind === m.kind)) return false;
+    if (m.kind === 'IN') return canUse(m.to_location_id);
+    if (m.kind === 'OUT') return canUse(m.from_location_id);
+    return canUse(m.from_location_id) && locations.some((l) => l.id === m.to_location_id);
+  }
+
+  /** Fill the form from a recent move (same product, type, locations, qty). */
+  function useMove(m: MovementRow) {
+    const p = products.find((x) => x.id === m.product_id);
+    if (!p) {
+      setMessage({ ok: false, text: `${m.product_name} is no longer an active product.` });
+      return;
+    }
+    setLookedUp(null);
+    setReadText(null);
+    setMatches([]);
+    setCode('');
+    setNote('');
+    if (canRedo(m)) {
+      setMode(m.kind);
+      if (m.from_location_id) setFromId(m.from_location_id);
+      if (m.to_location_id) setToId(m.to_location_id);
+      setProduct(p);
+      setQty(formatQty(m.qty));
+      setMessage(null);
+    } else {
+      choose(p); // only the product: that move can't be redone as it was
+      setMessage({ ok: true, text: `${p.name} selected. Pick the type and quantity.` });
+    }
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  }
+
+  /** Do a recent move again as it was, after a confirm. */
+  function repeatMove(m: MovementRow) {
+    if (!canRedo(m)) {
+      Alert.alert('Cannot repeat', 'You are not allowed to do this move at these locations.');
+      return;
+    }
+    const p = products.find((x) => x.id === m.product_id);
+    if (!p) {
+      Alert.alert('Cannot repeat', `${m.product_name} is no longer an active product.`);
+      return;
+    }
+    const have =
+      m.from_location_id != null
+        ? (stockRows.find((r) => r.product_id === p.id && r.location_id === m.from_location_id)?.qty ?? 0) +
+          pendingDelta(p.id, m.from_location_id)
+        : Infinity;
+    if (m.qty > have) {
+      Alert.alert('Not enough stock', `Only ${formatQty(have)} ${p.unit} at ${m.from_code}.`);
+      return;
+    }
+    const what = `${describeMove(m)}  ${formatQty(m.qty)} ${p.unit}  ${p.name}`;
+    Alert.alert('Repeat this move?', what, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Repeat',
+        onPress: async () => {
+          try {
+            const { queued } = await submitScan({
+              kind: m.kind as 'IN' | 'OUT' | 'TRANSFER',
+              product_id: p.id,
+              product_name: p.name,
+              unit: p.unit,
+              qty: m.qty,
+              from_id: m.from_location_id,
+              to_id: m.kind === 'OUT' ? null : m.to_location_id,
+              from_code: m.from_code,
+              to_code: m.kind === 'OUT' ? null : m.to_code,
+              note: m.note ?? '',
+            });
+            setMessage({
+              ok: true,
+              text: queued ? `Saved on this phone: ${what}. It will be sent when online.` : `Done: ${what}`,
+            });
+            loadStock().catch(() => {});
+            loadRecent();
+          } catch (e) {
+            setMessage({ ok: false, text: (e as Error).message });
+          }
+        },
+      },
+    ]);
+  }
+
+  const myId = session?.user.id;
+  const recentShown = recentFilter === 'mine' ? recent.filter((m) => m.created_by === myId) : recent;
+  const sideBySide = width >= 820;
+
+  const recentPanel = (
+    <View style={!sideBySide ? { marginTop: 16 } : undefined}>
+      <RecentMoves
+        rows={recentShown}
+        queued={queue}
+        filter={recentFilter}
+        onFilter={setRecentFilter}
+        onUse={useMove}
+        onRepeat={repeatMove}
+        onRefresh={loadRecent}
+        loading={recentLoading}
+        offline={recentFromCache}
+      />
+    </View>
+  );
+
   const pendingCount = queue.filter((q) => q.status === 'pending').length;
   const failedCount = queue.filter((q) => q.status === 'failed').length;
   const otherMatches = useMemo(() => matches.filter((m) => m.product.id !== product?.id), [matches, product]);
 
   return (
-    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.pad} keyboardShouldPersistTaps="handled">
+    <KeyboardAvoidingView
+      style={[styles.screen, sideBySide && { flexDirection: 'row' }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)}
+    >
+      <ScrollView
+        ref={scrollRef}
+        style={sideBySide ? { flex: 1.15 } : undefined}
+        contentContainerStyle={styles.pad}
+        keyboardShouldPersistTaps="handled"
+      >
         {(!online || fromCache) && (
           <Card style={{ borderColor: colors.warn, backgroundColor: colors.warnBg }}>
             <Text style={{ color: colors.text, fontWeight: '700' }}>{online ? 'Showing saved data' : 'Offline'}</Text>
@@ -403,7 +553,17 @@ export default function ScanScreen() {
             <Button title="Cancel" variant="outline" color={colors.muted} onPress={reset} />
           </Card>
         )}
+        {!sideBySide && recentPanel}
       </ScrollView>
+
+      {sideBySide && (
+        <ScrollView
+          style={{ flex: 1, borderLeftWidth: 1, borderLeftColor: colors.border }}
+          contentContainerStyle={styles.pad}
+        >
+          {recentPanel}
+        </ScrollView>
+      )}
 
       <BarcodeScanner
         visible={camera}
