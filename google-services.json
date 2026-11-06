@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "836313112015",
+    "project_id": "stock-oversee",
+    "storage_bucket": "stock-oversee.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:836313112015:android:dceb5dfe462694992a46ba",
+        "android_client_info": {
+          "package_name": "com.noni22.stockoverseee"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA2wiCWdwjggozchOtPluA_k4NWdc9UqEU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

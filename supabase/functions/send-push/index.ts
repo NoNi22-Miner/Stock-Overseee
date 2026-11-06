@@ -22,14 +22,16 @@ const admin = createClient(Deno.env.get('SUPABASE_URL')!, secretKey(), {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-function serviceAccount(): ServiceAccount | null {
+/** The Firebase key from the FCM_SERVICE_ACCOUNT secret, or why it can't be used. */
+function serviceAccount(): ServiceAccount | string {
   const raw = Deno.env.get('FCM_SERVICE_ACCOUNT');
-  if (!raw) return null;
+  if (!raw) return 'FCM_SERVICE_ACCOUNT not set';
   try {
     const sa = JSON.parse(raw);
-    return sa.project_id && sa.client_email && sa.private_key ? sa : null;
+    if (sa.project_id && sa.client_email && sa.private_key) return sa;
+    return 'FCM_SERVICE_ACCOUNT is JSON but not a service-account key (missing project_id / client_email / private_key)';
   } catch {
-    return null;
+    return `FCM_SERVICE_ACCOUNT is not valid JSON (${raw.length} characters; paste the whole key file)`;
   }
 }
 
@@ -88,7 +90,7 @@ async function accessToken(sa: ServiceAccount) {
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return new Response('Use POST', { status: 405 });
   const sa = serviceAccount();
-  if (!sa) return Response.json({ skipped: 'FCM_SERVICE_ACCOUNT not set' });
+  if (typeof sa === 'string') return Response.json({ skipped: sa });
 
   const { notification_id } = await req.json().catch(() => ({}));
   if (!notification_id) return Response.json({ error: 'notification_id required' }, { status: 400 });
@@ -118,6 +120,7 @@ Deno.serve(async (req) => {
 
   const bearer = await accessToken(sa);
   let sent = 0;
+  const failed: string[] = [];
   for (const { token } of tokens) {
     const res = await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
       method: 'POST',
@@ -145,7 +148,8 @@ Deno.serve(async (req) => {
       } else {
         console.error('FCM send failed', res.status, JSON.stringify(err));
       }
+      failed.push(String(code ?? res.status));
     }
   }
-  return Response.json({ sent });
+  return Response.json({ sent, failed });
 });
