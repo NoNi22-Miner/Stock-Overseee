@@ -68,13 +68,18 @@ export default function TeamScreen() {
           <Pressable
             disabled={!isOwner}
             onPress={() => router.push(`/user/${item.id}`)}
-            style={[styles.card, { flexDirection: 'row', alignItems: 'center', gap: 12 }, !item.is_active && { opacity: 0.5 }]}
+            style={[
+              styles.card,
+              { flexDirection: 'row', alignItems: 'center', gap: 12 },
+              !item.is_active && { opacity: 0.5 },
+            ]}
           >
             <View style={[dot, { backgroundColor: item.online ? colors.online : colors.border }]} />
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={styles.title}>{item.display_name || item.user_code || 'Owner'}</Text>
               <Text style={styles.muted}>
                 {item.user_code ? `@${item.user_code}` : 'email login'} · {ROLE_LABEL[item.role]}
+                {item.role === 'staff' ? (item.can_transfer ? ' · can transfer' : ' · no transfer') : ''}
                 {item.is_active ? '' : ' · disabled'}
               </Text>
             </View>

@@ -57,6 +57,7 @@ export type TeamMember = {
   display_name: string;
   role: import('./roles').Role;
   is_active: boolean;
+  can_transfer: boolean;
   last_seen_at: string | null;
   online: boolean;
   created_at: string;

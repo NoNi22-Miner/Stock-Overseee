@@ -12,7 +12,7 @@ import {
   recordMovement,
   stockForProduct,
 } from '../../lib/api';
-import { useRole } from '../../lib/auth';
+import { useAuth, useRole } from '../../lib/auth';
 import { can } from '../../lib/roles';
 import { colors, kindColor } from '../../lib/theme';
 import type { Location, MovementKind, Product, StockRow } from '../../lib/types';
@@ -26,7 +26,12 @@ const MODES: { kind: MovementKind; label: string }[] = [
 
 export default function ScanScreen() {
   const role = useRole();
-  const modes = MODES.filter((m) => m.kind !== 'ADJUST' || can.adjustStock(role));
+  const { profile } = useAuth();
+  const modes = MODES.filter(
+    (m) =>
+      (m.kind !== 'ADJUST' || can.adjustStock(role)) &&
+      (m.kind !== 'TRANSFER' || can.transfer(role, profile?.can_transfer)),
+  );
   const [locations, setLocations] = useState<Location[]>([]);
   const [mode, setMode] = useState<MovementKind>('IN');
   const [fromId, setFromId] = useState<string | null>(null);

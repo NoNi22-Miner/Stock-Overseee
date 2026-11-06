@@ -46,9 +46,7 @@ export async function getProduct(id: string): Promise<Product> {
 }
 
 export async function findProductByBarcode(barcode: string): Promise<Product | null> {
-  return check(
-    await supabase.from('products').select(PRODUCT_COLS).eq('barcode', barcode.trim()).maybeSingle(),
-  );
+  return check(await supabase.from('products').select(PRODUCT_COLS).eq('barcode', barcode.trim()).maybeSingle());
 }
 
 export type ProductInput = Omit<Product, 'id'>;
@@ -86,9 +84,9 @@ export async function stockAtLocation(locationId: string, search = ''): Promise<
 }
 
 export async function stockForProduct(productId: string): Promise<StockRow[]> {
-  return check(
-    await supabase.from('stock_overview').select(STOCK_COLS).eq('product_id', productId),
-  ).map(normalizeStock);
+  return check(await supabase.from('stock_overview').select(STOCK_COLS).eq('product_id', productId)).map(
+    normalizeStock,
+  );
 }
 
 export async function lowStockCounts(): Promise<Record<string, number>> {
@@ -175,8 +173,15 @@ export async function getTeamMember(id: string): Promise<TeamMember> {
 }
 
 type ManageUserBody =
-  | { action: 'create'; user_code: string; display_name: string; role: Role; password: string }
-  | { action: 'update'; user_id: string; display_name?: string; role?: Role; is_active?: boolean }
+  | { action: 'create'; user_code: string; display_name: string; role: Role; password: string; can_transfer: boolean }
+  | {
+      action: 'update';
+      user_id: string;
+      display_name?: string;
+      role?: Role;
+      is_active?: boolean;
+      can_transfer?: boolean;
+    }
   | { action: 'set_password'; user_id: string; password: string }
   | { action: 'delete'; user_id: string };
 

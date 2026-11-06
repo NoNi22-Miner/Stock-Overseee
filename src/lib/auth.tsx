@@ -10,6 +10,7 @@ export type Profile = {
   display_name: string;
   role: Role | null;
   is_active: boolean;
+  can_transfer: boolean;
 };
 
 type AuthState = {
@@ -69,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfileError(null);
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, user_code, display_name, role, is_active')
+      .select('id, user_code, display_name, role, is_active, can_transfer')
       .eq('id', userId)
       .maybeSingle();
     if (error) setProfileError(error.message);

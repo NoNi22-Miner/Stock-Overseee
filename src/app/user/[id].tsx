@@ -23,6 +23,7 @@ export default function UserScreen() {
   const [name, setName] = useState('');
   const [role, setRole] = useState<Role>('staff');
   const [active, setActive] = useState(true);
+  const [canTransfer, setCanTransfer] = useState(true);
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -35,6 +36,7 @@ export default function UserScreen() {
         setName(m.display_name);
         setRole(m.role);
         setActive(m.is_active);
+        setCanTransfer(m.can_transfer);
       })
       .catch((e) => Alert.alert('Error', e.message))
       .finally(() => setLoading(false));
@@ -75,7 +77,14 @@ export default function UserScreen() {
 
   async function create() {
     const ok = await run('create', () =>
-      manageUser({ action: 'create', user_code: code, display_name: name, role, password }),
+      manageUser({
+        action: 'create',
+        user_code: code,
+        display_name: name,
+        role,
+        password,
+        can_transfer: canTransfer,
+      }),
     );
     if (ok) {
       Alert.alert('Account created', `User ID: ${code}\nPassword: ${password}\n\nGive these to the person.`, [
@@ -91,7 +100,7 @@ export default function UserScreen() {
         action: 'update',
         user_id: member.id,
         display_name: name,
-        ...(isOwnerAccount ? {} : { role, is_active: active }),
+        ...(isOwnerAccount ? {} : { role, is_active: active, can_transfer: canTransfer }),
       }),
     );
     if (ok) router.back();
@@ -114,7 +123,9 @@ export default function UserScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.pad} keyboardShouldPersistTaps="handled">
-      <Stack.Screen options={{ title: isNew ? 'New account' : member?.display_name || member?.user_code || 'Account' }} />
+      <Stack.Screen
+        options={{ title: isNew ? 'New account' : member?.display_name || member?.user_code || 'Account' }}
+      />
 
       {isNew ? (
         <Field
@@ -147,6 +158,15 @@ export default function UserScreen() {
             ))}
           </View>
           {role !== 'owner' && <Text style={styles.muted}>{ROLE_INFO[role]}</Text>}
+          {role === 'staff' && (
+            <View style={[styles.row, { justifyContent: 'space-between', marginTop: 4 }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.text, fontSize: 16 }}>Allow Transfer</Text>
+                <Text style={styles.muted}>Move stock between locations (e.g. WRH → TOKO)</Text>
+              </View>
+              <Switch value={canTransfer} onValueChange={setCanTransfer} />
+            </View>
+          )}
         </View>
       )}
 
@@ -160,7 +180,11 @@ export default function UserScreen() {
             autoCapitalize="none"
             autoCorrect={false}
           />
-          <Chip label={showPw ? 'Hide password' : 'Show password'} active={false} onPress={() => setShowPw((v) => !v)} />
+          <Chip
+            label={showPw ? 'Hide password' : 'Show password'}
+            active={false}
+            onPress={() => setShowPw((v) => !v)}
+          />
           <Button
             title="Create account"
             onPress={create}
@@ -194,7 +218,11 @@ export default function UserScreen() {
               autoCapitalize="none"
               autoCorrect={false}
             />
-            <Chip label={showPw ? 'Hide password' : 'Show password'} active={false} onPress={() => setShowPw((v) => !v)} />
+            <Chip
+              label={showPw ? 'Hide password' : 'Show password'}
+              active={false}
+              onPress={() => setShowPw((v) => !v)}
+            />
             <Button
               title="Set new password"
               variant="outline"

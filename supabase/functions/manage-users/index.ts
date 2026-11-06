@@ -97,9 +97,14 @@ Deno.serve(async (req) => {
         }
 
         // The auth trigger made an empty profile; fill it in.
-        const { error: profErr } = await admin
-          .from('profiles')
-          .upsert({ id: created.user.id, user_code: code, display_name: displayName, role, is_active: true });
+        const { error: profErr } = await admin.from('profiles').upsert({
+          id: created.user.id,
+          user_code: code,
+          display_name: displayName,
+          role,
+          is_active: true,
+          can_transfer: body.can_transfer !== false,
+        });
         if (profErr) {
           await admin.auth.admin.deleteUser(created.user.id);
           throw new HttpError(500, profErr.message);
@@ -117,6 +122,7 @@ Deno.serve(async (req) => {
           }
         } else {
           if (body.role !== undefined) patch.role = checkRole(body.role);
+          if (typeof body.can_transfer === 'boolean') patch.can_transfer = body.can_transfer;
           if (typeof body.is_active === 'boolean') {
             patch.is_active = body.is_active;
             if (!body.is_active) patch.is_online = false;

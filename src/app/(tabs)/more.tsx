@@ -15,7 +15,7 @@ const KINDS: { kind: LocationKind; label: string }[] = [
 ];
 
 export default function MoreScreen() {
-  const { session, profile, signOut } = useAuth();
+  const { profile, signOut } = useAuth();
   const role = useRole();
   const manage = can.manageLocations(role);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -97,7 +97,7 @@ export default function MoreScreen() {
       <Card>
         <Text style={styles.title}>{profile?.display_name || profile?.user_code || 'Owner'}</Text>
         <Text style={styles.muted}>
-          {profile?.user_code ? `User ID: ${profile.user_code}` : session?.user.email}
+          {profile?.user_code ? `User ID: ${profile.user_code}` : 'Signs in with email'}
           {role ? `  ·  ${ROLE_LABEL[role]}` : ''}
         </Text>
         <Button title="Sign out" variant="outline" color={colors.out} onPress={signOut} />

@@ -1,7 +1,7 @@
 -- Accounts & roles
 --   owner    : signs in with email, manages accounts, full access
 --   oversee  : sees who is online, adjusts stock, stock in/out/transfer, manages products & locations
---   staff    : stock in/out/transfer only
+--   staff    : stock in/out; transfer only when can_transfer is on
 --   onlooker : read only
 -- Accounts other than the owner are created by the owner (Edge Function "manage-users")
 -- and sign in with a User ID.
@@ -14,6 +14,7 @@ create table public.profiles (
   display_name  text not null default '',
   role          public.app_role,            -- null = no access
   is_active     boolean not null default true,
+  can_transfer  boolean not null default true,  -- only matters for staff
   is_online     boolean not null default false,
   last_seen_at  timestamptz,
   created_at    timestamptz not null default now()
@@ -145,6 +146,10 @@ begin
   if p_kind not in ('IN', 'OUT', 'TRANSFER') then
     raise exception 'Unknown movement type %', p_kind;
   end if;
+  if p_kind = 'TRANSFER' and public.my_role() = 'staff'
+     and not coalesce((select can_transfer from public.profiles where id = auth.uid()), false) then
+    raise exception 'Your account is not allowed to transfer stock';
+  end if;
 
   if p_kind = 'IN' then p_from := null; end if;
   if p_kind = 'OUT' then p_to := null; end if;
@@ -244,6 +249,7 @@ select
   p.display_name,
   p.role,
   p.is_active,
+  p.can_transfer,
   p.last_seen_at,
   (p.is_active and p.is_online and p.last_seen_at > now() - interval '2 minutes') as online,
   p.created_at
