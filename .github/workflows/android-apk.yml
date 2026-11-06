@@ -2,9 +2,8 @@
 # GitHub Release, so it can be downloaded straight onto a phone or tablet.
 name: Android APK
 
+# Manual only: run it from the Actions tab ("Run workflow") when an APK is wanted.
 on:
-  push:
-    branches: [main, ccr-e5e142db-hisdnj]
   workflow_dispatch:
 
 permissions:
