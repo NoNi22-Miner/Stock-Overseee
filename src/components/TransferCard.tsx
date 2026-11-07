@@ -1,12 +1,12 @@
 import { router } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 import { formatQty } from '../lib/api';
-import { colors } from '../lib/theme';
+import { colors, themed } from '../lib/theme';
 import type { Transfer } from '../lib/types';
 import { styles } from './ui';
 
 export const STATUS_LABEL = { in_transit: 'In transit', short: 'Short', done: 'Done' } as const;
-const STATUS_COLOR = { in_transit: colors.primary, short: colors.warn, done: colors.in } as const;
+const STATUS_COLOR = themed(() => ({ in_transit: colors.primary, short: colors.warn, done: colors.in }));
 
 export function transferSummary(t: Transfer) {
   if (t.status === 'in_transit') return `${formatQty(t.qty_sent)} ${t.unit} on the way`;

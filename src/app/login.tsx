@@ -2,8 +2,10 @@ import { Link } from 'expo-router';
 import { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BrandMark } from '../components/BrandMark';
 import { Button, Field, styles } from '../components/ui';
 import { resolveLogin } from '../lib/api';
+import { useBrand } from '../lib/brand';
 import { supabase } from '../lib/supabase';
 import { colors } from '../lib/theme';
 
@@ -12,6 +14,8 @@ export default function Login() {
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  // The company look of the last team on this phone.
+  const { theme, companyName } = useBrand();
 
   async function signIn() {
     setBusy(true);
@@ -41,9 +45,14 @@ export default function Login() {
           contentContainerStyle={[styles.pad, { flexGrow: 1, justifyContent: 'center', gap: 16 }]}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={{ gap: 4, marginBottom: 12 }}>
-            <Text style={{ fontSize: 28, fontWeight: '800', color: colors.text }}>Stock Overseee</Text>
-            <Text style={styles.muted}>Warehouse & store stock, by scan.</Text>
+          <View style={{ gap: 8, marginBottom: 12 }}>
+            {theme.logo && <BrandMark size={56} />}
+            <Text style={{ fontSize: 28, fontWeight: '800', color: colors.text }}>
+              {companyName ?? 'Stock Overseee'}
+            </Text>
+            <Text style={styles.muted}>
+              {companyName ? 'Stock Overseee · warehouse & store stock, by scan.' : 'Warehouse & store stock, by scan.'}
+            </Text>
           </View>
 
           <Field

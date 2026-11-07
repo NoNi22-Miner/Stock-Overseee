@@ -1,7 +1,7 @@
 import { Pressable, Text, View } from 'react-native';
 import { formatQty } from '../lib/api';
 import type { QueuedScan } from '../lib/offline';
-import { colors, kindColor } from '../lib/theme';
+import { colors, kindColor, themed } from '../lib/theme';
 import { timeAgo } from '../lib/time';
 import type { MovementRow } from '../lib/types';
 import { describeMove } from './HistoryList';
@@ -131,8 +131,8 @@ export function RecentMoves({
 }
 
 const rowStyle = { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, borderLeftWidth: 5 };
-const qtyStyle = { color: colors.text, fontWeight: '800' as const, fontSize: 16 };
-const repeatBtn = {
+const qtyStyle = themed(() => ({ color: colors.text, fontWeight: '800' as const, fontSize: 16 }));
+const repeatBtn = themed(() => ({
   width: 40,
   height: 40,
   borderRadius: 20,
@@ -140,4 +140,4 @@ const repeatBtn = {
   borderColor: colors.primary,
   alignItems: 'center' as const,
   justifyContent: 'center' as const,
-};
+}));

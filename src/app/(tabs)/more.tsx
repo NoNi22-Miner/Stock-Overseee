@@ -1,4 +1,4 @@
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Alert, ScrollView, Switch, Text, View } from 'react-native';
 import { Button, Card, Chip, Field, styles } from '../../components/ui';
@@ -126,6 +126,13 @@ export default function MoreScreen() {
           </>
         ) : (
           <Text style={styles.title}>{team?.name ?? '…'}</Text>
+        )}
+        {isLeader && (
+          <Button
+            title="Theme & layout (logo, colors, menu)"
+            variant="outline"
+            onPress={() => router.push('/branding')}
+          />
         )}
       </Card>
 

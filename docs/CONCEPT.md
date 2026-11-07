@@ -106,6 +106,20 @@ Many items have no barcode, only a printed name. The camera has two modes:
   matches are listed to choose from.
 - Typing a name in the scan box uses the same matching.
 
+## 7c. Theme & layout — company branding (✅)
+
+Set by the **Team Leader** in More → Theme & layout; everyone in the team gets the same look.
+
+- **Company:** name and logo. The logo shows in the screen headers, on Home and on the login screen
+  (the phone remembers the last team's look, also offline). It is stored small (256 px PNG).
+- **Main color:** taken from the logo automatically (up to 5 choices), or picked from a palette or a
+  color code. Colors are adjusted so text stays readable.
+- **Mode:** light or dark. On dark mode the logo sits on a light plate.
+- **Menu:** side panel on the left, on the right, or tabs along the bottom.
+- **Spacing:** compact, normal or roomy.
+- **Home page:** each section can be turned off and moved up or down.
+- Saved in `teams.theme`. Members get a new look the next time they open the app.
+
 ## 8. Export (🔨)
 
 Generated on the device and shared through Android's share menu (WhatsApp, email, Drive, print):

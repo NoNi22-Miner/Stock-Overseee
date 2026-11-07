@@ -1,9 +1,10 @@
 import * as Notifications from 'expo-notifications';
-import { router, Stack } from 'expo-router';
+import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider } from 'expo-router';
 import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, Platform, View } from 'react-native';
 import { AuthProvider, useAuth } from '../lib/auth';
+import { BrandProvider, takePendingRoute } from '../lib/brand';
 import { routeForNotification } from '../lib/push';
 import { colors } from '../lib/theme';
 
@@ -21,6 +22,13 @@ function NotificationTaps({ ready }: { ready: boolean }) {
 
 function RootStack() {
   const { session, profile, loading } = useAuth();
+
+  // After the look changed, open again the screen that changed it (the app was redrawn).
+  useEffect(() => {
+    if (loading) return;
+    const r = takePendingRoute();
+    if (r) setTimeout(() => router.push(r as never), 50);
+  }, [loading]);
   // Phone notifications exist on Android / iOS only.
   const taps = Platform.OS !== 'web' && (
     <NotificationTaps ready={!loading && !!session && !!profile?.role && !!profile?.is_active} />
@@ -43,7 +51,14 @@ function RootStack() {
   return (
     <>
       {taps}
-      <Stack screenOptions={{ headerTintColor: colors.primary }}>
+      <Stack
+        screenOptions={{
+          headerTintColor: colors.primary,
+          headerStyle: { backgroundColor: colors.card },
+          headerTitleStyle: { color: colors.text },
+          contentStyle: { backgroundColor: colors.bg },
+        }}
+      >
         <Stack.Protected guard={hasAccess}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="product/[id]" options={{ title: 'Item' }} />
@@ -52,6 +67,7 @@ function RootStack() {
           <Stack.Screen name="import" options={{ title: 'Import items' }} />
           <Stack.Screen name="transfer/[id]" options={{ title: 'Transfer' }} />
           <Stack.Screen name="queue" options={{ title: 'Waiting to sync' }} />
+          <Stack.Screen name="branding" options={{ title: 'Theme & layout' }} />
         </Stack.Protected>
         <Stack.Protected guard={needsTeam}>
           <Stack.Screen name="create-team" options={{ headerShown: false }} />
@@ -68,11 +84,40 @@ function RootStack() {
   );
 }
 
+/** Navigation colors (headers, screen backgrounds) from the team's theme. */
+function navTheme() {
+  const base = colors.mode === 'dark' ? DarkTheme : DefaultTheme;
+  return {
+    ...base,
+    dark: colors.mode === 'dark',
+    colors: {
+      ...base.colors,
+      primary: colors.primary,
+      background: colors.bg,
+      card: colors.card,
+      text: colors.text,
+      border: colors.border,
+      notification: colors.out,
+    },
+  };
+}
+
+/** Drawn again (inside BrandProvider) whenever the team's look changes. */
+function ThemedApp() {
+  return (
+    <ThemeProvider value={navTheme()}>
+      <StatusBar style={colors.mode === 'dark' ? 'light' : 'dark'} />
+      <RootStack />
+    </ThemeProvider>
+  );
+}
+
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <StatusBar style="dark" />
-      <RootStack />
+      <BrandProvider>
+        <ThemedApp />
+      </BrandProvider>
     </AuthProvider>
   );
 }

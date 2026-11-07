@@ -3,18 +3,11 @@
 // a 2px gap between touching columns, hairline gridlines, text in ink colors only.
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import { chart, colors, themed } from '../lib/theme';
 import { formatQty } from '../lib/api';
 import type { DayStat, Metric } from '../lib/stats';
 
-export const chart = {
-  bar: '#2a78d6',
-  barActive: '#1c5cab',
-  grid: '#e1e0d9',
-  axis: '#c3c2b7',
-  ink: '#0b0b0b',
-  inkSecondary: '#52514e',
-  inkMuted: '#898781',
-};
+export { chart };
 
 /** Round up to 1, 2, 2.5 or 5 × 10^n so axis ticks are clean numbers. */
 export function niceMax(v: number) {
@@ -189,49 +182,45 @@ export function DailyColumns({
   );
 }
 
-const s = StyleSheet.create({
-  tile: {
-    flexGrow: 1,
-    flexBasis: 140,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#DDE2E8',
-    padding: 14,
-    gap: 2,
-  },
-  tileLabel: { color: chart.inkSecondary, fontSize: 13, fontWeight: '600' },
-  tileValue: { color: chart.ink, fontSize: 26, fontWeight: '700' },
-  tileNote: { color: chart.inkMuted, fontSize: 12 },
-  empty: { color: chart.inkMuted, paddingVertical: 12 },
-  rankLabel: { color: chart.ink, fontSize: 14, fontWeight: '600' },
-  rankNo: { color: chart.inkMuted, fontWeight: '600' },
-  rankBarRow: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 16 },
-  rankBar: {
-    height: 12,
-    backgroundColor: chart.bar,
-    borderTopRightRadius: 4,
-    borderBottomRightRadius: 4,
-    minWidth: 2,
-  },
-  rankValue: { color: chart.ink, fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  rankUnit: { color: chart.inkMuted, fontWeight: '400' },
-  readout: { color: chart.inkSecondary, fontSize: 12, marginBottom: 6, minHeight: 16 },
-  yTick: {
-    position: 'absolute',
-    right: 6,
-    color: chart.inkMuted,
-    fontSize: 10,
-    fontVariant: ['tabular-nums'],
-  },
-  grid: { position: 'absolute', left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: chart.grid },
-  baseline: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: chart.axis },
-  xTick: {
-    position: 'absolute',
-    width: 24,
-    textAlign: 'center',
-    color: chart.inkMuted,
-    fontSize: 10,
-    fontVariant: ['tabular-nums'],
-  },
-});
+const s = themed(() =>
+  StyleSheet.create({
+    tile: {
+      flexGrow: 1,
+      flexBasis: 140,
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 14,
+      gap: 2,
+    },
+    tileLabel: { color: chart.inkSecondary, fontSize: 13, fontWeight: '600' },
+    tileValue: { color: chart.ink, fontSize: 26, fontWeight: '700' },
+    tileNote: { color: chart.inkMuted, fontSize: 12 },
+    empty: { color: chart.inkMuted, paddingVertical: 12 },
+    rankLabel: { color: chart.ink, fontSize: 14, fontWeight: '600' },
+    rankNo: { color: chart.inkMuted, fontWeight: '600' },
+    rankBarRow: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 16 },
+    rankBar: {
+      height: 12,
+      backgroundColor: chart.bar,
+      borderTopRightRadius: 4,
+      borderBottomRightRadius: 4,
+      minWidth: 2,
+    },
+    rankValue: { color: chart.ink, fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] },
+    rankUnit: { color: chart.inkMuted, fontWeight: '400' },
+    readout: { color: chart.inkSecondary, fontSize: 12, marginBottom: 6, minHeight: 16 },
+    yTick: { position: 'absolute', right: 6, color: chart.inkMuted, fontSize: 10, fontVariant: ['tabular-nums'] },
+    grid: { position: 'absolute', left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: chart.grid },
+    baseline: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: chart.axis },
+    xTick: {
+      position: 'absolute',
+      width: 24,
+      textAlign: 'center',
+      color: chart.inkMuted,
+      fontSize: 10,
+      fontVariant: ['tabular-nums'],
+    },
+  }),
+);

@@ -9,16 +9,16 @@ import { importItems, listProducts } from '../lib/api';
 import { checkImport, TEMPLATE_EXAMPLE, TEMPLATE_HEADER, type ImportCheck, type ImportStatus } from '../lib/itemImport';
 import { cached, cacheSet, useOnline } from '../lib/offline';
 import { useRecognition } from '../lib/recognition';
-import { colors } from '../lib/theme';
+import { colors, themed } from '../lib/theme';
 import type { Product } from '../lib/types';
 import { readCsv, readXlsx, writeXlsx } from '../lib/xlsx';
 
-const STATUS: Record<ImportStatus, { label: string; color: string }> = {
+const STATUS = themed<Record<ImportStatus, { label: string; color: string }>>(() => ({
   new: { label: 'New', color: colors.in },
   exists: { label: 'Already in the app', color: colors.muted },
   repeat: { label: 'Repeated in the file', color: colors.muted },
   problem: { label: 'Not understood', color: colors.out },
-};
+}));
 
 async function fileBytes(asset: DocumentPicker.DocumentPickerAsset): Promise<Uint8Array> {
   if (Platform.OS === 'web') return new Uint8Array(await (await fetch(asset.uri)).arrayBuffer());

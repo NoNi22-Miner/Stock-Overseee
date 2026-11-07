@@ -3,7 +3,7 @@ import { useCallback, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 import { Button, Empty, styles } from '../../components/ui';
 import { listNotifications, markNotificationsRead } from '../../lib/api';
-import { colors } from '../../lib/theme';
+import { colors, themed } from '../../lib/theme';
 import { timeAgo } from '../../lib/time';
 import type { AppNotification, NotificationKind } from '../../lib/types';
 import { useUnread } from '../../lib/unread';
@@ -16,14 +16,14 @@ const KIND_LABEL: Record<NotificationKind, string> = {
   stock_change: 'Stock change',
   low_stock: 'Low stock',
 };
-const KIND_COLOR: Record<NotificationKind, string> = {
+const KIND_COLOR = themed<Record<NotificationKind, string>>(() => ({
   transfer_incoming: colors.primary,
   transfer_received: colors.in,
   transfer_short: colors.warn,
   transfer_resolved: colors.muted,
   stock_change: colors.border,
   low_stock: colors.out,
-};
+}));
 
 export default function InboxScreen() {
   const { refresh } = useUnread();
@@ -87,7 +87,7 @@ export default function InboxScreen() {
             style={({ pressed }) => [
               styles.card,
               { borderLeftWidth: 5, borderLeftColor: KIND_COLOR[item.kind] },
-              !item.read_at && { backgroundColor: '#EEF5FD' },
+              !item.read_at && { backgroundColor: colors.primarySoft },
               pressed && { opacity: 0.7 },
             ]}
           >

@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import type { Role } from './roles';
+import type { TeamTheme } from './theme';
 import type {
   Category,
   Term,
@@ -296,6 +297,16 @@ export async function getMyTeam(): Promise<Team | null> {
 
 export async function renameTeam(id: string, name: string) {
   check(await supabase.from('teams').update({ name: name.trim() }).eq('id', id));
+}
+
+/** The team's name and branding / layout (see lib/theme.ts). */
+export async function getTeamBrand(): Promise<{ id: string; name: string; theme: TeamTheme } | null> {
+  return check(await supabase.from('teams').select('id, name, theme').maybeSingle());
+}
+
+/** Team Leader only (checked by the database). */
+export async function saveTeamBrand(id: string, name: string, theme: TeamTheme) {
+  check(await supabase.from('teams').update({ name: name.trim(), theme }).eq('id', id));
 }
 
 // Recognition Table: categories, grades, labels, brands, marks ---------------------------------

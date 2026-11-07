@@ -15,7 +15,7 @@ import {
   type Metric,
   type MonthStats,
 } from '../../lib/stats';
-import { colors } from '../../lib/theme';
+import { colors, layout, themed, type HomeKey } from '../../lib/theme';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const MONTHS_LONG = [
@@ -106,6 +106,105 @@ export default function HomeScreen() {
       onPress: () => router.push(`/product/${i.product.id}`),
     }));
 
+  // Home sections in the order set in Theme & layout; Top 5 most / least sit side by side on wide
+  // screens when they follow each other.
+  const sections: HomeKey[][] = [];
+  for (const s of layout.home.filter((x) => x.on)) {
+    const last = sections[sections.length - 1];
+    const pair = (a: HomeKey, b: HomeKey) => (a === 'top' && b === 'least') || (a === 'least' && b === 'top');
+    if (wide && last?.length === 1 && pair(last[0], s.key)) last.push(s.key);
+    else sections.push([s.key]);
+  }
+
+  function renderSection(key: HomeKey, i: number, group: HomeKey[]) {
+    if (!stats || !scoped) return null;
+    if (group.length === 2 && i === 1) return null; // drawn with the first of the pair
+    if (group.length === 2) {
+      return (
+        <View key={key} style={{ flexDirection: 'row', gap: 12 }}>
+          {group.map((k) => renderSection(k, 0, [k]))}
+        </View>
+      );
+    }
+    switch (key) {
+      case 'tiles':
+        return (
+          <View key={key} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+            <StatTile
+              label="Movements"
+              value={compact(scoped.totalMoves)}
+              note={isCurrentMonth ? 'this month' : 'in month'}
+            />
+            <StatTile
+              label="Items moved"
+              value={`${scoped.itemsMoved}`}
+              note={`of ${scoped.items.filter((x) => x.product.is_active).length} products`}
+            />
+            <StatTile label="Low stock" value={`${scoped.lowStock}`} note="items at or below minimum, now" />
+          </View>
+        );
+      case 'top':
+        return (
+          <Card key={key} style={{ flex: 1, gap: 12 }}>
+            <Text style={styles.title}>Top 5 most moving</Text>
+            <RankedBars rows={toRows(top)} emptyText="Nothing moved yet this month." />
+          </Card>
+        );
+      case 'least':
+        return (
+          <Card key={key} style={{ flex: 1, gap: 12 }}>
+            <Text style={styles.title}>Top 5 least moving</Text>
+            <RankedBars rows={toRows(least)} emptyText="No products yet." />
+          </Card>
+        );
+      case 'category':
+        return (
+          <Card key={key} style={{ gap: 12 }}>
+            <View>
+              <Text style={styles.title}>Movement by category</Text>
+              <Text style={styles.muted}>
+                {metric === 'qty' ? 'Quantity moved' : 'Times moved'} this month · tap a category to filter
+              </Text>
+            </View>
+            <RankedBars rows={categoryRows} emptyText="No categories yet. Add them in Products → Recognition Table." />
+          </Card>
+        );
+      case 'daily':
+        return (
+          <View key={key} style={{ gap: 12 }}>
+            <Text style={[styles.title, { marginTop: 8 }]}>Daily movement</Text>
+            <Card style={{ gap: 4 }}>
+              <Text style={styles.title}>{categoryName ? `All ${categoryName} items` : 'All items'}</Text>
+              <Text style={styles.muted}>Number of movements per day</Text>
+              <DailyColumns days={scoped.allDays} metric="times" monthLabel={dayLabel} height={120} />
+            </Card>
+          </View>
+        );
+      case 'items':
+        return moved.length === 0 ? (
+          <Text key={key} style={styles.muted}>
+            Item charts appear here once stock moves this month.
+          </Text>
+        ) : (
+          <View key={key} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+            {moved.map((x) => (
+              <Card key={x.product.id} style={{ width: itemCardWidth ?? '100%', gap: 4 }}>
+                <Pressable onPress={() => router.push(`/product/${x.product.id}`)}>
+                  <Text style={styles.title} numberOfLines={1}>
+                    {x.product.name}
+                  </Text>
+                  <Text style={styles.muted}>
+                    {formatTotal(metricValue(x.total, metric), unitOf(x.product.unit))} this month
+                  </Text>
+                </Pressable>
+                <DailyColumns days={x.days} metric={metric} unit={x.product.unit} monthLabel={dayLabel} />
+              </Card>
+            ))}
+          </View>
+        );
+    }
+  }
+
   return (
     <ScrollView
       style={styles.screen}
@@ -156,71 +255,7 @@ export default function HomeScreen() {
         </ScrollView>
       )}
 
-      {stats && scoped && (
-        <>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-            <StatTile
-              label="Movements"
-              value={compact(scoped.totalMoves)}
-              note={isCurrentMonth ? 'this month' : 'in month'}
-            />
-            <StatTile
-              label="Items moved"
-              value={`${scoped.itemsMoved}`}
-              note={`of ${scoped.items.filter((i) => i.product.is_active).length} products`}
-            />
-            <StatTile label="Low stock" value={`${scoped.lowStock}`} note="items at or below minimum, now" />
-          </View>
-
-          <View style={{ flexDirection: wide ? 'row' : 'column', gap: 12 }}>
-            <Card style={{ flex: 1, gap: 12 }}>
-              <Text style={styles.title}>Top 5 most moving</Text>
-              <RankedBars rows={toRows(top)} emptyText="Nothing moved yet this month." />
-            </Card>
-            <Card style={{ flex: 1, gap: 12 }}>
-              <Text style={styles.title}>Top 5 least moving</Text>
-              <RankedBars rows={toRows(least)} emptyText="No products yet." />
-            </Card>
-          </View>
-
-          <Card style={{ gap: 12 }}>
-            <View>
-              <Text style={styles.title}>Movement by category</Text>
-              <Text style={styles.muted}>
-                {metric === 'qty' ? 'Quantity moved' : 'Times moved'} this month · tap a category to filter
-              </Text>
-            </View>
-            <RankedBars rows={categoryRows} emptyText="No categories yet. Add them in Products → Categories." />
-          </Card>
-
-          <Text style={[styles.title, { marginTop: 8 }]}>Daily movement</Text>
-          <Card style={{ gap: 4 }}>
-            <Text style={styles.title}>{categoryName ? `All ${categoryName} items` : 'All items'}</Text>
-            <Text style={styles.muted}>Number of movements per day</Text>
-            <DailyColumns days={scoped.allDays} metric="times" monthLabel={dayLabel} height={120} />
-          </Card>
-
-          {moved.length === 0 ? (
-            <Text style={styles.muted}>Item charts appear here once stock moves this month.</Text>
-          ) : (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-              {moved.map((i) => (
-                <Card key={i.product.id} style={{ width: itemCardWidth ?? '100%', gap: 4 }}>
-                  <Pressable onPress={() => router.push(`/product/${i.product.id}`)}>
-                    <Text style={styles.title} numberOfLines={1}>
-                      {i.product.name}
-                    </Text>
-                    <Text style={styles.muted}>
-                      {formatTotal(metricValue(i.total, metric), unitOf(i.product.unit))} this month
-                    </Text>
-                  </Pressable>
-                  <DailyColumns days={i.days} metric={metric} unit={i.product.unit} monthLabel={dayLabel} />
-                </Card>
-              ))}
-            </View>
-          )}
-        </>
-      )}
+      {stats && scoped && <View style={{ gap: 12 }}>{sections.map((group) => group.map(renderSection))}</View>}
     </ScrollView>
   );
 }
@@ -229,7 +264,7 @@ function formatTotal(v: number, unit: string) {
   return `${compact(v)} ${unit}`;
 }
 
-const navBtn = {
+const navBtn = themed(() => ({
   width: 40,
   height: 40,
   borderRadius: 20,
@@ -238,5 +273,5 @@ const navBtn = {
   backgroundColor: colors.card,
   alignItems: 'center' as const,
   justifyContent: 'center' as const,
-};
-const navText = { fontSize: 22, color: chart.ink, marginTop: -2 };
+}));
+const navText = themed(() => ({ fontSize: 22, color: chart.ink, marginTop: -2 }));

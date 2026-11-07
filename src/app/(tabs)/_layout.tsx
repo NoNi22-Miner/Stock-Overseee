@@ -1,10 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router/js-tabs';
 import type { ComponentProps } from 'react';
-import { useWindowDimensions, type ColorValue } from 'react-native';
+import { View, useWindowDimensions, type ColorValue } from 'react-native';
+import { BrandMark } from '../../components/BrandMark';
 import { useRole } from '../../lib/auth';
+import { useBrand } from '../../lib/brand';
 import { can } from '../../lib/roles';
-import { colors } from '../../lib/theme';
+import { colors, layout } from '../../lib/theme';
 import { useAutoSync } from '../../lib/offline';
 import { UnreadProvider, useUnread } from '../../lib/unread';
 
@@ -16,7 +18,10 @@ const icon =
     <Ionicons name={name} color={color as string} size={size} />
   );
 
-/** Side panel navigation: labels beside the icons on tablets, a slim icon rail on phones. */
+/**
+ * Menu as set in Theme & layout: a side panel on the left or right (labels beside the icons on
+ * tablets, a slim icon rail on phones), or tabs along the bottom.
+ */
 export default function TabsLayout() {
   return (
     <UnreadProvider>
@@ -29,32 +34,58 @@ function SideTabs() {
   useAutoSync(); // send offline scans whenever possible
   const role = useRole();
   const { count } = useUnread();
+  const { companyName, theme } = useBrand();
   const { width } = useWindowDimensions();
   const wide = width >= 700;
+  const side = layout.nav !== 'bottom';
+  const logo = theme.logo
+    ? () => (
+        <View style={{ marginHorizontal: 12 }}>
+          <BrandMark size={26} />
+        </View>
+      )
+    : undefined;
 
   return (
     <Tabs
       screenOptions={{
-        tabBarPosition: 'left',
-        tabBarVariant: 'material',
-        tabBarLabelPosition: wide ? 'beside-icon' : 'below-icon',
+        tabBarPosition: layout.nav,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
-        tabBarActiveBackgroundColor: '#E3EEFB',
-        // The side bar defaults to a 360dp minimum; keep it compact.
-        tabBarStyle: {
-          backgroundColor: colors.card,
-          borderRightColor: colors.border,
-          width: wide ? 200 : 84,
-          minWidth: wide ? 200 : 84,
-          paddingStart: wide ? 12 : 4,
-          paddingEnd: wide ? 12 : 4,
-        },
-        tabBarLabelStyle: { fontWeight: '600', fontSize: wide ? 14 : 11 },
-        headerTitleStyle: { fontWeight: '700' },
+        headerStyle: { backgroundColor: colors.card },
+        headerTitleStyle: { fontWeight: '700', color: colors.text },
+        headerTintColor: colors.primary,
+        headerLeft: logo,
+        sceneStyle: { backgroundColor: colors.bg },
+        ...(side
+          ? {
+              tabBarVariant: 'material' as const,
+              tabBarLabelPosition: wide ? ('beside-icon' as const) : ('below-icon' as const),
+              tabBarActiveBackgroundColor: colors.primarySoft,
+              // The side bar defaults to a 360dp minimum; keep it compact.
+              tabBarStyle: {
+                backgroundColor: colors.card,
+                borderRightColor: colors.border,
+                borderLeftColor: colors.border,
+                width: wide ? 200 : 84,
+                minWidth: wide ? 200 : 84,
+                paddingStart: wide ? 12 : 4,
+                paddingEnd: wide ? 12 : 4,
+              },
+              tabBarLabelStyle: { fontWeight: '600' as const, fontSize: wide ? 14 : 11 },
+            }
+          : {
+              // Nine tabs along the bottom: icons only on phones, with labels on tablets.
+              tabBarShowLabel: wide,
+              tabBarStyle: { backgroundColor: colors.card, borderTopColor: colors.border },
+              tabBarLabelStyle: { fontWeight: '600' as const, fontSize: 12 },
+            }),
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: icon('home-outline') }} />
+      <Tabs.Screen
+        name="index"
+        options={{ title: companyName || 'Home', tabBarLabel: 'Home', tabBarIcon: icon('home-outline') }}
+      />
       <Tabs.Screen
         name="inbox"
         options={{
