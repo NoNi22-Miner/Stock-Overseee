@@ -1,6 +1,6 @@
-# Item recognition and Delivery Order scanning — design (for approval)
+# Item recognition — final concept
 
-Status: **proposal, not built yet.** Agreed so far with the Team Leader on 7 Nov 2026.
+Status: **agreed concept, not built yet** (7 Nov 2026). Replaces the earlier full-page DO idea.
 
 ## 1. Item structure (the Recognition Table)
 
@@ -9,86 +9,104 @@ spelled the same way.
 
 | Part | Example | Required | List |
 |---|---|:-:|---|
-| **Category** | PLAT BESI | ✅ | per team; each category has its **own size pattern** |
+| **Category** | BESI BETON ULIR, PLAT BESI | ✅ | per team; each category has its **own size pattern** |
 | **Grade** | A / B / C | – | one list for all categories |
-| **Label** (standard / jurisdiction) | SS400 | – | per team |
-| **Size** | 16mm × 4' × 8' | ✅ | fields follow the category's pattern |
-| **Brand** | VM* | – | per team |
+| **Label** (standard / jurisdiction) | U-280, SS400 | – | per team |
+| **Size** | 16mm × 12m · 16mm × 4' × 8' | ✅ | boxes follow the category's size pattern |
+| **Brand** | AS-T, VM\* | – | per team |
 | **Unit** | Lembar / Batang / Pcs / Kg | ✅ | Kg allows decimals; Lembar, Batang and Pcs are whole numbers |
 
 - **Type** = Category + Grade, e.g. "PLAT BESI A".
-- Name built automatically: **PLAT BESI A · SS400 · 16mm × 4' × 8' · VM\***
-- **Size patterns** (examples, set per category by the Team Leader):
+- The name is built automatically, in this order:
+  - **Category Grade · Label · Size · Brand**
+  - e.g. **PLAT BESI A · SS400 · 16mm × 4' × 8' · VM\***
+  - e.g. **BESI BETON ULIR · U-280 · 16mm × 12m · AS-T**
+- **Size patterns** are set per category by the Team Leader / Oversee. Examples:
+  - Besi Beton Ulir: Diameter (mm) × Panjang (m)
   - Plat Besi: Tebal (mm) × Lebar (ft) × Panjang (ft)
   - Pipa: Diameter (inch) × Tebal (mm) × Panjang (m)
-  - As: Diameter (mm) × Panjang (m)
-- **Other spellings (aliases)** on every list entry, because suppliers write things differently:
-  - "PLAT BESI" = "PLAT HITAM" = "PL" = "PLATE"
-  - "SS400" = "SS 400" = "SS-400"
-  - "4'" = "4 ft" = "1219"
+- **Other spellings (aliases)** on every list entry, because paperwork spells things differently:
+  - "BESI BETON ULIR" = "BB ULIR" = "BESI ULIR"
+  - "U-280" = "U280" = "U 280"
+  - "AS-T" = "AST"
+  - "SS400" = "SS 400"
   - "VM\*" = "VM"
+- **Locations get aliases too.** "PNK IPS" / "PNK1PS" = **WRH**, ready for the DO file import later.
 - No duplicates: the same Category + Grade + Label + Size + Brand can exist only once.
+- **Weight (KG) is not tracked** in this version (possible next update: weight per unit).
 - Existing items keep working. They show as **"not structured"** until someone edits them into parts.
 
-## 2. Adding items
+## 2. Setting up and adding items
 
-- **In the app:** Category → Grade → Label → size boxes (from the category's pattern) → Brand → Unit
-  → Save.
-- **Excel import:** download a template, fill in one row per item (Category, Grade, Label, size 1,
-  size 2, size 3, Brand, Unit, min stock), then import it.
-  - The app shows a check list first: new items, duplicates, and unknown categories / labels / brands.
-    The Team Leader confirms before anything is saved.
-  - Unknown list entries can be created during the import.
+- **Recognition Table screen** (Products → Recognition Table, Team Leader / Oversee only):
+  - tabs **Categories** (with size pattern), **Grades**, **Labels**, **Brands**
+  - every entry has a list of other spellings
+- **Add item:** Category → Grade → Label → size boxes → Brand → Unit → Save.
+- **Excel import of items:**
+  - Download the template: Category · Grade · Label · Size 1 · Size 2 · Size 3 · Brand · Unit · Min stock.
+  - Fill it in and import it.
+  - A check list comes first: new items, duplicates, and unknown categories / labels / brands (these can
+    be created during the import). Nothing is saved until the Team Leader confirms.
 
-## 3. Scanning a Delivery Order page (main flow)
+## 3. Scanning an item name (partial scan)
 
-The camera reads **paper**: a Delivery Order (Surat Jalan) or similar page, not the steel itself. One
-page usually lists several items with quantities, so one photo becomes a whole list.
+The camera reads **only the item name**, for example the description line on a Delivery Order. It does
+not read the whole page or the quantity.
 
-1. **Scan → Stock In / Out / Transfer → Scan document.** Take one photo of the page. Long or
-   multi-page orders: add more pages.
-2. **Read:** the text is read on the phone (offline) and split into **rows**, using the position of
-   each line on the page.
-3. **Understand each row:** the app looks for
-   - the **quantity + unit**, e.g. "20 lbr", "5 btg", "150 kg"
-   - the item parts: Category / Grade / Label / Size / Brand, using the lists and their aliases
-4. **Review list:** one line per row of the page.
+1. **Scan** → choose In / Out / Transfer and the location as today.
+2. **Scan with camera → Words.** Put the **item name line inside the box**, e.g.
+   `BESI BETON ULIR 16MMX12M AS-T U-280`, and tap **Read words**. Only the text **inside the box** is
+   read, so the address, signatures and other lines on the page are ignored.
+3. The app finds each part:
+
+   | Read | Understood as |
+   |---|---|
+   | BESI BETON ULIR | Category |
+   | 16MMX12M | Size 16 mm × 12 m |
+   | AS-T | Brand |
+   | U-280 | Label |
+
+4. **List of possible items**, best first, each showing which parts matched:
 
    ```
-   ✓ PLAT BESI A · SS400 · 16mm×4'×8' · VM*      20 Lembar   [change]
-   ? Pick one:  PLAT BESI · SS400 · 12mm×4'×8' · VM*   or   … · KS     10 Lembar
-   ✗ "PIPA HTM 2 inch"  — no match: [search] [skip]
+   BESI BETON ULIR · U-280 · 16mm×12m · AS-T     ✓Category ✓Size ✓Label ✓Brand
+   BESI BETON ULIR · U-280 · 16mm×12m · KS       ✓Category ✓Size ✓Label
+   BESI BETON ULIR · U-280 · 13mm×12m · AS-T     ✓Category ✓Label ✓Brand   (size differs)
    ```
 
-   - **✓ sure match:** the item is filled in. Check the qty.
-   - **? several possible items:** a short list of similar items. Tap the right one, then enter or check
-     the qty.
-   - **✗ no match:** search or pick it by tapping (see 4), or skip the row.
-   - Header lines (company name, address, date, signatures) are ignored automatically.
-5. **Confirm all at once.** Every line becomes a movement (In / Out / Transfer), with the order number
-   as the note. Offline it goes to the sync queue like any scan.
-6. **Learning:** when you pick an item for a row that didn't match, the app can **remember that
-   supplier spelling** as an alias, so it matches by itself next time.
+   - **Sizes must agree.** A different size is never shown as a sure match.
+   - Parts that weren't read (e.g. covered by a signature) don't count against an item.
+5. **Tap the right item → qty pad** (shows the unit, e.g. "Batang") → enter the qty → confirm.
+   Works offline like every scan.
+6. **Learns the spelling:** after you pick an item from the list, the app remembers that exact text for
+   that item. The next time the same text is scanned, the item is selected straight away.
+7. **Narrow by tapping:** under the list, chips for Category / Grade / Label / Size / Brand. With no
+   scan at all you can also tap your way to any item: Category → Grade → Label → Size → Brand.
+8. **Typing** a name in the scan box uses the same matching.
 
-## 4. Picking an item without scanning
+## 4. Later (not in this version)
 
-Narrow with taps: **Category → Grade → Label → Size → Brand**, about 5 taps to any item with no typing.
-The same filter chips appear under every "Pick one" list.
+- **DO file import** from your DO system (Excel / PDF), using the warehouse column via location aliases.
+  Waiting for a sample file.
+- Weight per unit / KG totals.
+- Basket mode, QR labels, quick picks (from the brainstorm).
 
 ## 5. Technical notes
 
-- The current text reader gives text blocks without positions. Splitting a page into rows needs
-  line positions, so the plan is to switch to Google ML Kit through
-  `@infinitered/react-native-mlkit-text-recognition`. It also includes the model in the app, so it
-  works offline from the first use. A test build is needed to confirm it builds with this Expo
-  version.
-- Matching runs on the phone against the saved item list, so it also works offline.
-- Database changes: `grades`, `labels`, `brands` tables; `categories.size_pattern`; `aliases` on every
-  list; products get `grade_id`, `label_id`, `brand_id`, `size` (values), `unit`
-  (lembar / batang / pcs / kg). All per team, with the same security rules as today.
+- **Reading only the box:** the photo is cropped to the box area (plus a small margin) before the text
+  is read on the phone (offline). The current text reader stays.
+- **Matching** runs on the phone against the saved item list, so it also works offline.
+  - Each part is matched through its list and aliases.
+  - Sizes are read from patterns like `16MMX12M`, `16 x 4 x 8` and `16mm × 4' × 8'`, and compared
+    number by number.
+- **Database:**
+  - new tables `grades`, `labels`, `brands`, `product_aliases` (learned spellings)
+  - `categories.size_pattern` and `aliases` on every list (and on locations)
+  - products get `grade_id`, `label_id`, `brand_id`, `size` (values) and `unit`
+    (lembar / batang / pcs / kg)
+  - all per team, with the same security rules as today
 
-## 6. Needed from the Team Leader
+## 6. Still needed
 
-- **A photo of a real Delivery Order page** (cover prices or customer names if needed). It shows how
-  rows, quantities and units are written, so the row reading can be tuned to it.
-- The **categories and their size patterns** you use (e.g. Plat Besi, Pipa, As, Siku, …).
+- Your **categories and size patterns**. They can also be typed into the Recognition Table later.
+- The **DO export file** for the later DO import.
