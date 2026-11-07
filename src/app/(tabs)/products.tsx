@@ -42,29 +42,31 @@ export default function ProductsScreen() {
   );
 
   const categoryName = (id: string | null) => categories.find((c) => c.id === id)?.name ?? 'Uncategorized';
-  const q = search.trim().toLowerCase();
+  // Every word typed must be in the name or code, in any order ("plat 10mm kp").
+  const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const shown = products.filter(
     (p) =>
       (category === null || (category === 'none' ? !p.category_id : p.category_id === category)) &&
-      (!q || p.name.toLowerCase().includes(q) || p.barcode.toLowerCase().includes(q)),
+      words.every((w) => p.name.toLowerCase().includes(w) || p.barcode.toLowerCase().includes(w)),
   );
 
   return (
     <View style={styles.screen}>
       <View style={[styles.pad, { paddingBottom: 4 }]}>
         {manage && (
-          <View style={styles.row}>
+          <View style={[styles.row, { flexWrap: 'wrap' }]}>
             <Button
-              title="+ Add product"
-              style={{ flex: 1 }}
+              title="+ Add item"
+              style={{ flexGrow: 1 }}
               onPress={() => router.push({ pathname: '/product/[id]', params: { id: 'new' } })}
             />
-            <Button title="Categories" variant="outline" onPress={() => router.push('/categories')} />
+            <Button title="Import Excel" variant="outline" onPress={() => router.push('/import')} />
           </View>
         )}
+        <Button title="Recognition Table" variant="outline" onPress={() => router.push('/recognition')} />
         <TextInput
           style={styles.input}
-          placeholder="Search name or barcode"
+          placeholder="Search name or code"
           placeholderTextColor={colors.muted}
           value={search}
           onChangeText={setSearch}
@@ -85,7 +87,13 @@ export default function ProductsScreen() {
         keyExtractor={(p) => p.id}
         contentContainerStyle={{ padding: 16, paddingTop: 8, gap: 8 }}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
-        ListEmptyComponent={loading ? undefined : <Empty text="No products found." />}
+        ListEmptyComponent={loading ? undefined : <Empty text="No items found." />}
+        ListHeaderComponent={
+          <Text style={styles.muted}>
+            {shown.length} item{shown.length === 1 ? '' : 's'}
+          </Text>
+        }
+        initialNumToRender={25}
         renderItem={({ item }) => (
           <Pressable
             onPress={() => router.push(`/product/${item.id}`)}
@@ -93,9 +101,13 @@ export default function ProductsScreen() {
           >
             <Text style={styles.title}>{item.name}</Text>
             <Text style={styles.muted}>
-              {categoryName(item.category_id)} · {item.barcode} · {item.unit} · min {formatQty(Number(item.min_stock))}
+              {item.structured ? '' : `${categoryName(item.category_id)} · `}
+              {item.barcode} · {item.unit} · min {formatQty(Number(item.min_stock))}
               {item.is_active ? '' : ' · inactive'}
             </Text>
+            {!item.structured && (
+              <Text style={{ color: colors.warn, fontSize: 12, fontWeight: '700' }}>NOT STRUCTURED</Text>
+            )}
           </Pressable>
         )}
       />

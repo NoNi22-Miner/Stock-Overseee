@@ -1,8 +1,8 @@
 # Item recognition — final concept
 
-Status: **agreed concept, not built yet** (7 Nov 2026). Replaces the earlier full-page DO idea.
+Status: **built** (7 Nov 2026). Replaces the earlier full-page DO idea.
 Section 6 was checked against the real item list (`Item_Name.xlsx`, 398 names): every name splits
-into these parts.
+into these parts, and the list was loaded as 384 items (14 exact repeats merged).
 
 ## 1. Item structure (the Recognition Table)
 
@@ -16,8 +16,8 @@ spelled the same way.
 | **Labels** (standard / spec) | U-280 · SS400 · SCH40 + SNI | – | per team; **an item can have up to 3** |
 | **Size** | 16mm × 12m · 100 × 50 × 20 × 2.3mm × 6m | ✅* | **up to 5 boxes**, following the category's size pattern |
 | **Brand** | AS-T, KP, VM | – | per team |
-| **Mark** | (\*) , NS | – | meaning to be confirmed (section 7) |
-| **Unit** | Lembar / Batang / Pcs / Kg / … | ✅ | per team list; each unit says if decimals are allowed (Kg yes) |
+| **Mark** | \* , NS | – | \* = different quality / tolerance; NS = non standard / no certificate |
+| **Unit** | Lembar / Batang / Pcs / Roll / Dus / KG | ✅ | fixed list; only KG takes decimals, the others are whole numbers |
 
 \* A category can have no size pattern (e.g. BARANG BAN BEKAS); its items have no size.
 
@@ -30,6 +30,8 @@ spelled the same way.
 - **Size patterns** are set per category by the Team Leader / Oversee (full list in section 6). A size box:
   - has a name and a usual unit (mm, cm, m, inch ", feet ', kg, L, BWG, °)
   - can be **optional** — PIPA HITAM is written both as `1"X6M` and as `1" (30.5MM)X1.6MMX6M`
+  - can have a **default** used when the size leaves it out — e.g. CNP BESI length 6m, unless the
+    item says otherwise
   - can hold a **range** — `600-635CM`
   - can hold a **second reading in brackets** — `1 1/2" (44.5MM)`
   - takes the unit that is written, so `1.47MMX675MMX800MM` and `1.8MMX4'X8'` both fit PLAT BESI
@@ -47,7 +49,7 @@ spelled the same way.
 ## 2. Setting up and adding items
 
 - **Recognition Table screen** (Products → Recognition Table, Team Leader / Oversee only):
-  - tabs **Categories** (size pattern + default unit), **Grades**, **Labels**, **Brands**, **Units**
+  - tabs **Categories** (size pattern + default unit), **Grades**, **Labels**, **Brands**, **Marks**
   - every entry has a list of other spellings
 - **Add item:** Category → Grade → Labels → size boxes → Brand → Unit → Save.
 - **Excel import of items:**
@@ -119,12 +121,21 @@ not read the whole page or the quantity.
   - Each part is matched through its list and aliases, with the OCR fixes used today (O↔0, I↔1, S↔5).
   - Sizes are compared number by number.
 - **Database:**
-  - new tables `grades`, `labels`, `brands`, `units`, `product_aliases` (learned spellings)
-  - `categories.size_pattern` (box names, units, optional flag) and `categories.default_unit`
-  - `aliases` on every list (and on locations)
-  - products get `grade_id`, `label_ids` (up to 3, in order), `brand_id`, `mark`, `size` (values per box)
-    and `unit`
+  - migration `20261107000000_recognition.sql`
+  - one table `recognition_terms` for grades, labels, brands and marks (`kind`), plus
+    `product_aliases` (learned spellings)
+  - `categories.size_pattern` (box name, unit, optional, default), `categories.default_unit`
+  - `aliases` on categories, list entries and locations
+  - products get `structured`, `grade_id`, `label_ids` (up to 3, in order), `brand_id`, `mark_ids`,
+    `size` (values per box); the database builds the name and gives a code (IT…) when none is typed
+  - renaming a list entry renames its items; an entry or category in use cannot be deleted
+  - whole numbers are enforced for every unit except KG
+  - `import_items()` adds items from the Excel import (missing categories / entries are created)
   - all per team, with the same security rules as today
+- **App code:** `src/lib/recognize.ts` (reader, sizes, matching), `src/lib/itemImport.ts`,
+  `src/lib/xlsx.ts`, screens `src/app/recognition.tsx`, `src/app/import.tsx`, `src/app/product/[id].tsx`,
+  `src/components/ItemPicker.tsx`. Tested on the 398 names: the right item comes first for all of them,
+  also with typical camera mistakes (O/0, I/1, S/5), and a wrong item is never picked by itself.
 
 ## 6. Your Recognition Table (from Item_Name.xlsx)
 
@@ -134,30 +145,30 @@ Starting lists made from the 398 names. They can all be changed in the Recogniti
 
 | Category | Size pattern | Default unit | Items |
 |---|---|---|--:|
-| AS BESI | Diameter (mm / inch) × Panjang (m) | Batang | 30 |
+| AS BESI | Diameter (mm / inch) × Panjang (m, default 6m) | Batang | 30 |
 | AS BESI SEGI-4 | Sisi × Sisi (mm) × Panjang (m) | Batang | 1 |
 | AS STAINLESS (paper: AS) | Diameter (mm / inch) × Panjang (m / cm) | Batang | 14 |
 | BARANG BAN BEKAS | no size | Pcs | 1 |
 | BESI BETON | Diameter (mm) × Panjang (m) | Batang | 15 |
 | BESI BETON ULIR | Diameter (mm) × Panjang (m) | Batang | 13 |
-| CAT BESI DAN KAYU | Isi (L / kg) | ? | 1 |
-| CAT MENI | Isi (L / kg) | ? | 1 |
-| CAT TEMBOK | Isi (L / kg) | ? | 2 |
-| CNP BESI | Tinggi × Lebar × Bibir × Tebal (mm) × Panjang (m) | Batang | 12 |
+| CAT BESI DAN KAYU | Isi (L / kg) | Pcs | 1 |
+| CAT MENI | Isi (L / kg) | Pcs | 1 |
+| CAT TEMBOK | Isi (L / kg) | Pcs | 2 |
+| CNP BESI | Tinggi × Lebar × Bibir × Tebal (mm) × Panjang (m, default 6m) | Batang | 12 |
 | ELBOW BESI | Diameter (inch) × Sudut (°) | Pcs | 4 |
 | FLANGE | Diameter (inch) | Pcs | 1 |
 | H BEAM BESI | H × B × t1 × t2 (mm) × Panjang (m) | Batang | 3 |
-| KAWAT BENDRAT | BWG × Berat (kg) | ? | 3 |
-| KAWAT LAS | Diameter (mm) | ? | 15 |
-| KAWAT LAS KUNINGAN | Diameter (mm) | ? | 3 |
-| PAKU | Panjang (inch) × Berat (kg) | ? | 1 |
+| KAWAT BENDRAT | BWG × Berat (kg) | Roll | 3 |
+| KAWAT LAS | Diameter (mm) | Dus | 15 |
+| KAWAT LAS KUNINGAN | Diameter (mm) | KG | 3 |
+| PAKU | Panjang (inch) × Berat (kg) | Dus | 1 |
 | PIPA BESI | Diameter (inch) × Panjang (m) | Batang | 27 |
 | PIPA GALVANIS | Diameter (inch) × Panjang (m) | Batang | 8 |
 | PIPA HITAM | Diameter (inch) (OD mm, optional) × Tebal (mm, optional) × Panjang (m) | Batang | 41 |
 | PIPA KOTAK GALVANIS | Sisi × Sisi × Tebal (mm) × Panjang (m) | Batang | 2 |
 | PIPA KOTAK HITAM | Sisi × Sisi × Tebal (mm) × Panjang (m) | Batang | 1 |
 | PIPA STAINLESS (paper: PIPA) | Diameter (inch) × Panjang (m) | Batang | 8 |
-| PLAT ALUMINIUM | Tebal (mm) × Lebar (m) × Panjang (m) | Lembar | 11 |
+| PLAT ALUMINIUM | Tebal (mm) × Lebar (m) × Panjang (m) | Lembar (coils of 25m / 50m: Roll) | 11 |
 | PLAT ALUMINIUM BORDES | Tebal (mm) × Lebar (m) × Panjang (m) | Lembar | 3 |
 | PLAT BESI | Tebal (mm) × Lebar (ft) × Panjang (ft) | Lembar | 164 |
 | PLAT BESI BORDES | Tebal (mm) × Lebar (ft) × Panjang (ft) | Lembar | 13 |
@@ -189,13 +200,16 @@ Starting lists made from the 398 names. They can all be changed in the Recogniti
 - **B** — 8 items (CNP BESI, PLAT BESI SPHC MB B)
 - **C** — none in the list yet
 
-## 7. Still needed
+## 7. Answers (7 Nov 2026)
 
-1. **What does (\*) mean?** 37 items. `VM` and `VM(*)` are separate items in the list, so they are kept
-   apart (shown as `VM*`).
-2. **What does NS mean?** 10 items, e.g. `PLAT BESI 1MMX4'X8' CB NS`, `FLANGE 5" 10K NS`. Non-standard?
-3. **14 names appear twice** in the list. Same item (merge into one) or different items?
-4. **Units** for Kawat Bendrat, Kawat Las, Paku, Cat and aluminium coils (25M / 50M):
-   Roll, Dus, Kg, Kaleng, Pail?
-5. **Possible typos:** `AS SS201 2 1/2MMX600-635CM` (2 1/2" inch?), `CNP BESI 75X35MMX2X1.8M` (no length?).
-6. The **DO export file** for the later DO import.
+1. **(\*)** = different quality and tolerance. Kept as the mark `*`, so `VM` and `VM*` stay separate items.
+2. **NS** = non standard / no certificate. Kept as the mark `NS`.
+3. Names that are **100% the same** were merged (14).
+4. **Units:** Lembar, Batang, Pcs, Roll, Dus, KG.
+5. **Typos** fixed when loading: `AS SS201 2 1/2MM…` became 2 1/2" (inch). `CNP BESI 75X35MMX2X1.8M`
+   was loaded as 75 × 35 × 2 × 1.8mm × 6m (please check). Where a length is missing in a category
+   like CNP BESI, 6m is used unless the item has a note.
+
+## 8. Still needed
+
+- The **DO export file** for the later DO import.

@@ -6,6 +6,7 @@ export type Location = {
   name: string;
   kind: LocationKind;
   is_active: boolean;
+  aliases?: string[];
 };
 
 export type Product = {
@@ -16,9 +17,24 @@ export type Product = {
   min_stock: number;
   is_active: boolean;
   category_id: string | null;
+  /** Built from parts (Recognition Table); the name is then made by the database. */
+  structured: boolean;
+  grade_id: string | null;
+  brand_id: string | null;
+  label_ids: string[];
+  mark_ids: string[];
+  size: string[];
 };
 
-export type Category = { id: string; name: string };
+/** One box of a category's size pattern, e.g. { name: 'Panjang', unit: 'm', default: '6m' }. */
+export type SizeBox = { name: string; unit?: string; optional?: boolean; default?: string };
+
+export type Category = { id: string; name: string; aliases: string[]; size_pattern: SizeBox[]; default_unit: string };
+
+export type TermKind = 'grade' | 'label' | 'brand' | 'mark';
+
+/** A grade, label, brand or mark in the Recognition Table. */
+export type Term = { id: string; kind: TermKind; name: string; aliases: string[]; meaning: string | null };
 
 export type StockRow = {
   product_id: string;

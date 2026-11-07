@@ -3,6 +3,7 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 import type { Role } from './roles';
 import type {
   Category,
+  Term,
   Location,
   LocationKind,
   MovementKind,
@@ -23,7 +24,7 @@ function check<T>(res: { data: T | null; error: { message: string } | null }): T
 // Locations -------------------------------------------------------------------
 
 export async function listLocations(includeInactive = false): Promise<Location[]> {
-  let q = supabase.from('locations').select('id, code, name, kind, is_active').order('created_at');
+  let q = supabase.from('locations').select('id, code, name, kind, is_active, aliases').order('created_at');
   if (!includeInactive) q = q.eq('is_active', true);
   return check(await q);
 }
@@ -42,15 +43,35 @@ export async function setLocationActive(id: string, is_active: boolean) {
   check(await supabase.from('locations').update({ is_active }).eq('id', id));
 }
 
+/** Other spellings of a location on paperwork, e.g. "PNK IPS" for WRH. */
+export async function setLocationAliases(id: string, aliases: string[]) {
+  check(await supabase.from('locations').update({ aliases }).eq('id', id));
+}
+
 // Products --------------------------------------------------------------------
 
-const PRODUCT_COLS = 'id, barcode, name, unit, min_stock, is_active, category_id';
+const PRODUCT_COLS =
+  'id, barcode, name, unit, min_stock, is_active, category_id, structured, grade_id, brand_id, label_ids, mark_ids, size';
+
+/** Reads every row of a query, 1000 at a time (the server's page limit). */
+async function allRows<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+) {
+  const out: T[] = [];
+  for (let from = 0; ; from += 1000) {
+    const rows = check(await page(from, from + 999)) ?? [];
+    out.push(...rows);
+    if (rows.length < 1000) return out;
+  }
+}
 
 export async function listProducts(search = ''): Promise<Product[]> {
-  let q = supabase.from('products').select(PRODUCT_COLS).order('name').limit(500);
   const s = search.trim();
-  if (s) q = q.or(`name.ilike.%${escapeLike(s)}%,barcode.ilike.%${escapeLike(s)}%`);
-  return check(await q);
+  return allRows<Product>((from, to) => {
+    let q = supabase.from('products').select(PRODUCT_COLS).order('name').range(from, to);
+    if (s) q = q.or(`name.ilike.%${escapeLike(s)}%,barcode.ilike.%${escapeLike(s)}%`);
+    return q;
+  });
 }
 
 export async function getProduct(id: string): Promise<Product> {
@@ -63,19 +84,32 @@ export async function findProductByBarcode(barcode: string): Promise<Product | n
 
 export type ProductInput = Omit<Product, 'id'>;
 
+/** For a structured item the database builds the name from the parts; an empty code gets one (IT…). */
 export async function saveProduct(id: string | null, input: ProductInput): Promise<Product> {
   const row = {
-    barcode: input.barcode.trim(),
-    name: input.name.trim(),
-    unit: input.unit.trim() || 'pcs',
+    barcode: input.barcode.trim() || null,
+    name: input.name.trim() || 'item',
+    unit: input.unit,
     min_stock: input.min_stock,
     is_active: input.is_active,
     category_id: input.category_id,
+    structured: input.structured,
+    grade_id: input.structured ? input.grade_id : null,
+    brand_id: input.structured ? input.brand_id : null,
+    label_ids: input.structured ? input.label_ids : [],
+    mark_ids: input.structured ? input.mark_ids : [],
+    size: input.structured ? input.size.map((s) => s.trim()).filter(Boolean) : [],
   };
   const res = id
     ? await supabase.from('products').update(row).eq('id', id).select(PRODUCT_COLS).single()
     : await supabase.from('products').insert(row).select(PRODUCT_COLS).single();
-  if (res.error?.code === '23505') throw new Error('Another product already uses this barcode.');
+  if (res.error?.code === '23505') {
+    throw new Error(
+      res.error.message.startsWith('This item already exists')
+        ? res.error.message
+        : 'Another item already uses this code / barcode.',
+    );
+  }
   return check(res);
 }
 
@@ -264,32 +298,90 @@ export async function renameTeam(id: string, name: string) {
   check(await supabase.from('teams').update({ name: name.trim() }).eq('id', id));
 }
 
-// Categories ------------------------------------------------------------------
+// Recognition Table: categories, grades, labels, brands, marks ---------------------------------
+
+const CATEGORY_COLS = 'id, name, aliases, size_pattern, default_unit';
 
 export async function listCategories(): Promise<Category[]> {
-  return check(await supabase.from('categories').select('id, name').order('name'));
+  return check(await supabase.from('categories').select(CATEGORY_COLS).order('name'));
 }
 
-function categoryError(e: { message: string; code?: string } | null) {
+function listError(e: { message: string; code?: string } | null, what: string) {
   if (!e) return;
-  if (e.code === '23505') throw new Error('A category with that name already exists.');
+  if (e.code === '23505') throw new Error(`A ${what} with that name already exists.`);
   throw new Error(e.message);
 }
 
-export async function addCategory(name: string) {
-  const { error } = await supabase.from('categories').insert({ name: name.trim() });
-  categoryError(error);
+export type CategoryInput = Omit<Category, 'id'>;
+
+export async function saveCategory(id: string | null, input: CategoryInput) {
+  const row = {
+    name: input.name.trim(),
+    aliases: input.aliases,
+    size_pattern: input.size_pattern,
+    default_unit: input.default_unit,
+  };
+  const { error } = id
+    ? await supabase.from('categories').update(row).eq('id', id)
+    : await supabase.from('categories').insert(row);
+  listError(error, 'category');
 }
 
-export async function renameCategory(id: string, name: string) {
-  const { error } = await supabase.from('categories').update({ name: name.trim() }).eq('id', id);
-  categoryError(error);
-}
-
-/** Products in the category become uncategorized. */
+/** Refused while items still use it. Items not split into parts become uncategorized. */
 export async function deleteCategory(id: string) {
   const { error } = await supabase.from('categories').delete().eq('id', id);
-  categoryError(error);
+  listError(error, 'category');
+}
+
+export async function listTerms(): Promise<Term[]> {
+  return check(await supabase.from('recognition_terms').select('id, kind, name, aliases, meaning').order('name'));
+}
+
+export async function saveTerm(id: string | null, input: Omit<Term, 'id'>) {
+  const row = { kind: input.kind, name: input.name.trim(), aliases: input.aliases, meaning: input.meaning };
+  const { error } = id
+    ? await supabase.from('recognition_terms').update(row).eq('id', id)
+    : await supabase.from('recognition_terms').insert(row);
+  listError(error, input.kind);
+}
+
+/** Refused while items still use it. */
+export async function deleteTerm(id: string) {
+  const { error } = await supabase.from('recognition_terms').delete().eq('id', id);
+  listError(error, 'entry');
+}
+
+/** Learned spellings: text read from paper -> the item someone picked for it. */
+export async function listSpellings(): Promise<{ spelling: string; product_id: string }[]> {
+  return allRows((from, to) =>
+    supabase.from('product_aliases').select('spelling, product_id').order('spelling').range(from, to),
+  );
+}
+
+export async function saveSpelling(spelling: string, productId: string) {
+  const { error } = await supabase
+    .from('product_aliases')
+    .upsert({ spelling, product_id: productId }, { onConflict: 'team_id,spelling' });
+  if (error) throw new Error(error.message);
+}
+
+export type ImportItem = {
+  category: string;
+  grade?: string | null;
+  labels: string[];
+  size: string[];
+  brand?: string | null;
+  marks: string[];
+  unit: string;
+  min_stock?: number;
+  barcode?: string | null;
+};
+
+/** Adds the items (and any missing categories / list entries); items that already exist are skipped. */
+export async function importItems(items: ImportItem[]) {
+  const { data, error } = await supabase.rpc('import_items', { p_items: items });
+  if (error) throw new Error(error.message);
+  return data as { added: number; skipped: number; new_list_entries: number };
 }
 
 // Location access ----------------------------------------------------------------

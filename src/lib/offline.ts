@@ -218,6 +218,7 @@ export function syncQueue() {
         );
       }
     }
+    await syncSpellings().catch(() => {});
     return { synced, failed };
   })().finally(() => {
     syncing = null;
@@ -237,6 +238,72 @@ export async function retryScan(clientId: string, qty?: number) {
 
 export async function discardScan(clientId: string) {
   await saveQueue((await loadQueue()).filter((x) => x.client_id !== clientId));
+}
+
+// Learned spellings made offline ------------------------------------------------------------------
+
+type PendingSpelling = { spelling: string; product_id: string };
+const spellingsKey = () => `spellings:${scope}`;
+
+export async function pendingSpellings(): Promise<PendingSpelling[]> {
+  try {
+    const raw = await AsyncStorage.getItem(spellingsKey());
+    return raw ? (JSON.parse(raw) as PendingSpelling[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function savePendingSpellings(list: PendingSpelling[]) {
+  try {
+    await AsyncStorage.setItem(spellingsKey(), JSON.stringify(list.slice(-500)));
+  } catch {
+    // not important enough to fail a scan
+  }
+}
+
+async function sendSpelling(s: PendingSpelling) {
+  const { error } = await supabase
+    .from('product_aliases')
+    .upsert({ spelling: s.spelling, product_id: s.product_id }, { onConflict: 'team_id,spelling' });
+  if (error) throw new Error(error.message);
+}
+
+/** Remember that this text means this item. Kept on the phone and sent when online. */
+export async function learnSpelling(spelling: string, productId: string) {
+  const item = { spelling, product_id: productId };
+  const rest = (await pendingSpellings()).filter((x) => x.spelling !== spelling);
+  if (online) {
+    try {
+      await sendSpelling(item);
+      await savePendingSpellings(rest);
+      return;
+    } catch (e) {
+      if (!isNetworkError(e)) {
+        await savePendingSpellings(rest);
+        return; // e.g. an Onlooker: nothing to keep
+      }
+    }
+  }
+  await savePendingSpellings([...rest, item]);
+}
+
+async function syncSpellings() {
+  const list = await pendingSpellings();
+  if (!list.length) return;
+  const left: PendingSpelling[] = [];
+  for (const s of list) {
+    if (!online) {
+      left.push(s);
+      continue;
+    }
+    try {
+      await sendSpelling(s);
+    } catch (e) {
+      if (isNetworkError(e)) left.push(s);
+    }
+  }
+  await savePendingSpellings(left);
 }
 
 /** Keep trying while scans are waiting: every 30 s and whenever the connection comes back. */

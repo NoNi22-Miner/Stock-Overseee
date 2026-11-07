@@ -13,14 +13,16 @@ import {
   type ScrollViewInstance,
 } from 'react-native';
 import { BarcodeScanner } from '../../components/BarcodeScanner';
+import { ItemPicker } from '../../components/ItemPicker';
 import { LocationPicker } from '../../components/LocationPicker';
 import { RecentMoves, isRepeatable, type RecentFilter } from '../../components/RecentMoves';
 import { describeMove } from '../../components/HistoryList';
 import { Button, Card, Chip, Field, styles } from '../../components/ui';
 import { formatQty, listHistory, listLocations, listMyStock, listProducts, recordAdjustment } from '../../lib/api';
 import { useAuth, useLocationAccess, useRole } from '../../lib/auth';
-import { isConfident, matchProducts, type ProductMatch } from '../../lib/match';
 import { cached, submitScan, useOnline, useQueue } from '../../lib/offline';
+import { useRecognition } from '../../lib/recognition';
+import { allowsDecimals, isSure, rankItems, splitName, type ItemMatch } from '../../lib/recognize';
 import { can } from '../../lib/roles';
 import { colors, kindColor } from '../../lib/theme';
 import { timeAgo } from '../../lib/time';
@@ -60,7 +62,11 @@ export default function ScanScreen() {
   const [code, setCode] = useState('');
   const [lookedUp, setLookedUp] = useState<string | null>(null);
   const [readText, setReadText] = useState<string | null>(null);
-  const [matches, setMatches] = useState<ProductMatch[]>([]);
+  const [matches, setMatches] = useState<ItemMatch[]>([]);
+  /** The match list came from text, and the user had to pick: remember the pick for that text. */
+  const [pickFor, setPickFor] = useState<string | null>(null);
+  const [picker, setPicker] = useState(false);
+  const recognition = useRecognition();
   const [product, setProduct] = useState<Product | null>(null);
   const [qty, setQty] = useState('1');
   const [note, setNote] = useState('');
@@ -147,7 +153,10 @@ export default function ScanScreen() {
     [product, stockRows, pendingDelta],
   );
 
-  function choose(p: Product) {
+  function choose(p: Product, learnIt = false) {
+    if (learnIt && pickFor) recognition.learn(pickFor, p.id);
+    setPickFor(null);
+    setPicker(false);
     setProduct(p);
     unknownCode.current = null;
     setQty(mode === 'ADJUST' ? formatQty(stockAtFor(p, fromId)) : '1');
@@ -156,25 +165,31 @@ export default function ScanScreen() {
     (stockRows.find((s) => s.product_id === p.id && s.location_id === locationId)?.qty ?? 0) +
     pendingDelta(p.id, locationId);
 
-  /** Exact barcode / code first; otherwise the closest product names. */
+  /** Exact barcode / code first; then items whose parts match (or learned spellings). */
   function findText(blocks: string[], list: Product[] = products) {
     const text = blocks.join(' ').trim();
     if (!text) return;
     setMessage(null);
     setLookedUp(text);
+    setPicker(false);
     const exact = list.find((p) => p.barcode.trim().toLowerCase() === text.toLowerCase());
-    const found = exact ? [{ product: exact, score: 1 }] : matchProducts(blocks, list, 6);
+    const found = exact
+      ? [{ product: exact, score: 1 }]
+      : rankItems(blocks, list, recognition.dict, recognition.learned, 6);
     setMatches(found);
-    if (exact || isConfident(found)) {
+    if (exact || isSure(found)) {
       choose(found[0].product);
     } else {
       setProduct(null);
+      setPickFor(text);
       unknownCode.current = found.length ? null : text;
     }
   }
 
   function reset() {
     unknownCode.current = null;
+    setPickFor(null);
+    setPicker(false);
     setCode('');
     setLookedUp(null);
     setReadText(null);
@@ -207,7 +222,9 @@ export default function ScanScreen() {
   }
 
   let problem: string | null = null;
-  if (!product) problem = 'Scan or pick a product first';
+  if (!product) problem = 'Scan or pick an item first';
+  else if (!allowsDecimals(product.unit) && qty.trim() !== '' && !Number.isInteger(qtyNum))
+    problem = `${product.unit} is counted in whole numbers (only KG takes decimals)`;
   else if (isAdjust) {
     if (!online) problem = 'A stock count needs internet (it must be checked against current stock)';
     else if (qty.trim() === '' || !(qtyNum >= 0)) problem = 'Enter the counted quantity (0 or more)';
@@ -379,6 +396,10 @@ export default function ScanScreen() {
   const pendingCount = queue.filter((q) => q.status === 'pending').length;
   const failedCount = queue.filter((q) => q.status === 'failed').length;
   const otherMatches = useMemo(() => matches.filter((m) => m.product.id !== product?.id), [matches, product]);
+  const readCategory = useMemo(
+    () => (lookedUp ? splitName(lookedUp, recognition.dict, true).categoryId : null),
+    [lookedUp, recognition.dict],
+  );
 
   return (
     <KeyboardAvoidingView
@@ -444,7 +465,23 @@ export default function ScanScreen() {
           />
         )}
 
-        <Button title="Scan with camera (barcode or words)" onPress={() => setCamera(true)} color={kindColor[mode]} />
+        <View style={styles.row}>
+          <Button
+            title="Scan with camera"
+            onPress={() => setCamera(true)}
+            color={kindColor[mode]}
+            style={{ flex: 1 }}
+          />
+          <Button
+            title={picker ? 'Close list' : 'Pick by tapping'}
+            variant="outline"
+            color={kindColor[mode]}
+            onPress={() => {
+              setPicker((v) => !v);
+              setMessage(null);
+            }}
+          />
+        </View>
         <TextInput
           style={styles.input}
           placeholder="…or type a name / code (or use a USB scanner), then Enter"
@@ -469,32 +506,52 @@ export default function ScanScreen() {
           </Text>
         )}
 
-        {/* No clear match: let the user pick the closest product */}
-        {lookedUp && !product && matches.length > 0 && (
+        {/* Find an item by tapping: Category → Grade → Label → Size → Brand */}
+        {picker && !product && (
           <Card style={{ gap: 8 }}>
-            <Text style={styles.title}>Which product is it?</Text>
-            <Text style={styles.muted}>Closest matches for “{lookedUp}”</Text>
-            {matches.map((m) => (
-              <MatchRow key={m.product.id} m={m} onPress={() => choose(m.product)} />
-            ))}
+            <Text style={styles.title}>Pick the item</Text>
+            <ItemPicker
+              products={products}
+              dict={recognition.dict}
+              startCategory={readCategory}
+              onPick={(p) => choose(p, !!lookedUp)}
+            />
           </Card>
         )}
 
-        {lookedUp && !product && matches.length === 0 && !busy && (
+        {/* No clear match: let the user pick from the possible items */}
+        {lookedUp && !product && !picker && matches.length > 0 && (
+          <Card style={{ gap: 8 }}>
+            <Text style={styles.title}>Which item is it?</Text>
+            <Text style={styles.muted}>Possible items for “{lookedUp}”, best first</Text>
+            {matches.map((m) => (
+              <MatchRow key={m.product.id} m={m} onPress={() => choose(m.product, true)} />
+            ))}
+            <Button title="Not here? Narrow down by tapping" variant="outline" onPress={() => setPicker(true)} />
+          </Card>
+        )}
+
+        {lookedUp && !product && !picker && matches.length === 0 && !busy && (
           <Card>
-            <Text style={styles.title}>No matching product</Text>
+            <Text style={styles.title}>No matching item</Text>
             <Text style={styles.muted}>{lookedUp}</Text>
+            <Button title="Pick by tapping" variant="outline" onPress={() => setPicker(true)} />
             {can.manageProducts(role) ? (
               online ? (
                 <Button
-                  title="Register a new product"
-                  onPress={() => router.push({ pathname: '/product/[id]', params: { id: 'new', barcode: lookedUp } })}
+                  title="Register a new item"
+                  onPress={() =>
+                    router.push({
+                      pathname: '/product/[id]',
+                      params: readText ? { id: 'new', text: lookedUp } : { id: 'new', barcode: lookedUp },
+                    })
+                  }
                 />
               ) : (
                 <Text style={{ color: colors.text }}>Adding products needs internet.</Text>
               )
             ) : (
-              <Text style={{ color: colors.text }}>Ask your Team Leader or an Oversee to register this product.</Text>
+              <Text style={{ color: colors.text }}>Ask your Team Leader or an Oversee to register this item.</Text>
             )}
           </Card>
         )}
@@ -520,7 +577,10 @@ export default function ScanScreen() {
                       label={`${m.product.name} · ${Math.round(m.score * 100)}%`}
                       active={false}
                       color={colors.muted}
-                      onPress={() => choose(m.product)}
+                      onPress={() => {
+                        if (lookedUp) recognition.learn(lookedUp, m.product.id);
+                        choose(m.product);
+                      }}
                     />
                   ))}
                 </View>
@@ -534,7 +594,7 @@ export default function ScanScreen() {
               <Button title="−" variant="outline" onPress={() => step(-1)} style={{ width: 56 }} />
               <TextInput
                 style={[styles.input, { flex: 1, textAlign: 'center', fontSize: 22, fontWeight: '700' }]}
-                keyboardType="decimal-pad"
+                keyboardType={allowsDecimals(product.unit) ? 'decimal-pad' : 'number-pad'}
                 value={qty}
                 onChangeText={setQty}
                 selectTextOnFocus
@@ -585,20 +645,40 @@ export default function ScanScreen() {
   );
 }
 
-function MatchRow({ m, onPress }: { m: ProductMatch; onPress: () => void }) {
+const PART_LABEL = { category: 'Category', grade: 'Grade', label: 'Label', size: 'Size', brand: 'Brand', mark: 'Mark' };
+
+function MatchRow({ m, onPress }: { m: ItemMatch; onPress: () => void }) {
   const pct = Math.round(m.score * 100);
+  const checks = Object.entries(m.checks ?? {}).filter(([, v]) => v !== 'unread') as [
+    keyof typeof PART_LABEL,
+    'match' | 'differs',
+  ][];
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
         { flexDirection: 'row', alignItems: 'center' },
+        m.sizeDiffers && { borderColor: colors.warn },
         pressed && { opacity: 0.7 },
       ]}
     >
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, gap: 4 }}>
         <Text style={styles.title}>{m.product.name}</Text>
-        <Text style={styles.muted}>{m.product.barcode}</Text>
+        {checks.length > 0 && (
+          <View style={[styles.row, { flexWrap: 'wrap', gap: 6 }]}>
+            {checks.map(([k, v]) => (
+              <Text key={k} style={{ fontSize: 12, fontWeight: '700', color: v === 'match' ? colors.in : colors.out }}>
+                {v === 'match' ? '✓' : '✗'} {PART_LABEL[k]}
+                {k === 'size' && v === 'differs' ? ' differs' : ''}
+              </Text>
+            ))}
+          </View>
+        )}
+        <Text style={styles.muted}>
+          {m.product.barcode} · {m.product.unit}
+          {m.learned ? ' · picked before for this text' : ''}
+        </Text>
       </View>
       <Text style={{ color: colors.text, fontWeight: '700' }}>{pct}%</Text>
     </Pressable>

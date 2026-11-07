@@ -46,9 +46,10 @@ function RootStack() {
       <Stack screenOptions={{ headerTintColor: colors.primary }}>
         <Stack.Protected guard={hasAccess}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="product/[id]" options={{ title: 'Product' }} />
+          <Stack.Screen name="product/[id]" options={{ title: 'Item' }} />
           <Stack.Screen name="user/[id]" options={{ title: 'Account' }} />
-          <Stack.Screen name="categories" options={{ title: 'Categories' }} />
+          <Stack.Screen name="recognition" options={{ title: 'Recognition Table' }} />
+          <Stack.Screen name="import" options={{ title: 'Import items' }} />
           <Stack.Screen name="transfer/[id]" options={{ title: 'Transfer' }} />
           <Stack.Screen name="queue" options={{ title: 'Waiting to sync' }} />
         </Stack.Protected>

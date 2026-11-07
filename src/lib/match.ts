@@ -93,7 +93,8 @@ function coverage(textTokens: string[], nameTokens: string[]) {
   return weighted / weights;
 }
 
-function scoreAgainst(text: string, product: Product) {
+/** 0..1: how well the text fits the product's name or code. */
+export function scoreText(text: string, product: Pick<Product, 'name' | 'barcode'>) {
   const t = normalize(text);
   if (!t) return 0;
   const textTokens = t.split(' ');
@@ -119,7 +120,7 @@ export function matchProducts(blocks: string[], products: Product[], limit = 5):
   const unique = [...new Set(candidates.map(normalize))].filter((c) => c.length >= 2);
   return products
     .filter((p) => p.is_active)
-    .map((product) => ({ product, score: Math.max(0, ...unique.map((c) => scoreAgainst(c, product))) }))
+    .map((product) => ({ product, score: Math.max(0, ...unique.map((c) => scoreText(c, product))) }))
     .filter((m) => m.score >= 0.35)
     .sort((a, b) => b.score - a.score || a.product.name.localeCompare(b.product.name))
     .slice(0, limit);
