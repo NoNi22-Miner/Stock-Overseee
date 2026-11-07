@@ -201,15 +201,19 @@ Deno.serve(async (req) => {
           if (typeof body.is_active === 'boolean') {
             patch.is_active = body.is_active;
             if (!body.is_active) patch.is_online = false;
-            const { error } = await admin.auth.admin.updateUserById(target.id, {
-              ban_duration: body.is_active ? 'none' : '876000h',
-            });
-            if (error) throw new HttpError(500, error.message);
           }
         }
+        // The profile first: the database refuses a change past the plan's limits (e.g. a second
+        // Staff on the Free plan), and then the sign-in is not unblocked either.
         if (Object.keys(patch).length) {
           const { error } = await admin.from('profiles').update(patch).eq('id', target.id);
           if (error) throw new HttpError(409, friendly(error.message));
+        }
+        if (target.role !== 'owner' && typeof body.is_active === 'boolean') {
+          const { error } = await admin.auth.admin.updateUserById(target.id, {
+            ban_duration: body.is_active ? 'none' : '876000h',
+          });
+          if (error) throw new HttpError(500, error.message);
         }
         if (target.role !== 'owner' && (body.all_locations !== undefined || body.location_ids !== undefined)) {
           await setLocations(target.id, teamId, await checkLocations(body, teamId));

@@ -1,6 +1,7 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Alert, ScrollView, Switch, Text, View } from 'react-native';
+import { PlanCard } from '../../components/PlanCard';
 import { Button, Card, Chip, Field, styles } from '../../components/ui';
 import {
   addLocation,
@@ -25,7 +26,7 @@ const KINDS: { kind: LocationKind; label: string }[] = [
 ];
 
 export default function MoreScreen() {
-  const { profile, signOut, reloadProfile } = useAuth();
+  const { profile, signOut, reloadProfile, plan } = useAuth();
   const queue = useQueue();
   const [notifyChanges, setNotifyChangesState] = useState(profile?.notify_changes ?? true);
   const role = useRole();
@@ -63,6 +64,7 @@ export default function MoreScreen() {
       setCode('');
       setName('');
       load();
+      reloadProfile();
     } catch (e) {
       const msg = (e as Error).message;
       Alert.alert('Could not add location', /duplicate|unique/i.test(msg) ? 'That code is already used.' : msg);
@@ -75,6 +77,7 @@ export default function MoreScreen() {
     try {
       await setLocationActive(l.id, !l.is_active);
       load();
+      reloadProfile();
     } catch (e) {
       Alert.alert('Error', (e as Error).message);
     }
@@ -110,7 +113,10 @@ export default function MoreScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.pad} keyboardShouldPersistTaps="handled">
-      <Text style={styles.title}>Team</Text>
+      <Text style={styles.title}>Plan</Text>
+      <PlanCard />
+
+      <Text style={[styles.title, { marginTop: 12 }]}>Team</Text>
       <Card style={{ gap: 10 }}>
         {isLeader ? (
           <>
@@ -144,12 +150,25 @@ export default function MoreScreen() {
               {l.code} <Text style={styles.muted}>· {l.kind}</Text>
             </Text>
             <Text style={styles.muted}>{l.name}</Text>
+            {plan.locked_locations.includes(l.id) && (
+              <Text style={{ color: colors.warn, fontWeight: '700', fontSize: 12 }}>
+                🔒 LOCKED: view only until Pro is renewed
+              </Text>
+            )}
           </View>
           <Switch value={l.is_active} onValueChange={() => toggle(l)} disabled={!manage} />
         </Card>
       ))}
 
-      {manage && (
+      {manage && plan.locations >= plan.max_locations && (
+        <Card style={{ gap: 8 }}>
+          <Text style={{ color: colors.text }}>
+            The Free plan has 1 location. Pro gives you as many as you need (WRH, TOKO, …).
+          </Text>
+          <Button title="See plans" onPress={() => router.push('/plans')} />
+        </Card>
+      )}
+      {manage && plan.locations < plan.max_locations && (
         <Card style={{ gap: 10 }}>
           <Text style={styles.title}>Add location</Text>
           <Field

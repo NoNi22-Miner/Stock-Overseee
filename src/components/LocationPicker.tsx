@@ -1,4 +1,5 @@
 import { Text, View } from 'react-native';
+import { useAuth } from '../lib/auth';
 import type { Location } from '../lib/types';
 import { Chip, styles } from './ui';
 
@@ -17,6 +18,7 @@ export function LocationPicker({
   exclude?: string | null;
   badges?: Record<string, number>;
 }) {
+  const { plan } = useAuth();
   return (
     <View style={{ gap: 6 }}>
       {label && <Text style={styles.label}>{label}</Text>}
@@ -26,7 +28,7 @@ export function LocationPicker({
           .map((l) => (
             <Chip
               key={l.id}
-              label={l.code}
+              label={plan.locked_locations.includes(l.id) ? `${l.code} 🔒` : l.code}
               active={value === l.id}
               onPress={() => onChange(l.id)}
               badge={badges?.[l.id]}

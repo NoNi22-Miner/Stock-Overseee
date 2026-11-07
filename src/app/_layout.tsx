@@ -68,6 +68,9 @@ function RootStack() {
           <Stack.Screen name="transfer/[id]" options={{ title: 'Transfer' }} />
           <Stack.Screen name="queue" options={{ title: 'Waiting to sync' }} />
           <Stack.Screen name="branding" options={{ title: 'Theme & layout' }} />
+          <Stack.Screen name="plans" options={{ title: 'Plans' }} />
+          <Stack.Screen name="requests" options={{ title: 'Feature requests' }} />
+          <Stack.Screen name="developer" options={{ title: 'Developer' }} />
         </Stack.Protected>
         <Stack.Protected guard={needsTeam}>
           <Stack.Screen name="create-team" options={{ headerShown: false }} />

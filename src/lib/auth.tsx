@@ -2,6 +2,7 @@ import type { Session } from '@supabase/supabase-js';
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 import { cacheGet, cacheSet, isNetworkError, setOfflineScope } from './offline';
+import { FREE_INFO, getPlanInfo, type PlanInfo } from './plan';
 import { registerForPush, unregisterPush, watchPushToken } from './push';
 import type { Role } from './roles';
 import { supabase } from './supabase';
@@ -26,6 +27,8 @@ type AuthState = {
   profileError: string | null;
   /** Locations this member may use (every team location for the Team Leader). */
   myLocations: string[];
+  /** The team's plan, limits and what is locked. */
+  plan: PlanInfo;
   reloadProfile: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -36,6 +39,7 @@ const AuthContext = createContext<AuthState>({
   loading: true,
   profileError: null,
   myLocations: [],
+  plan: FREE_INFO,
   reloadProfile: async () => {},
   signOut: async () => {},
 });
@@ -56,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Which user the current profile was loaded for (null = not loaded yet).
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [myLocations, setMyLocations] = useState<string[]>([]);
+  const [plan, setPlan] = useState<PlanInfo>(FREE_INFO);
   const [profileError, setProfileError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -88,10 +93,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .maybeSingle();
     // Offline: use the copy saved on this phone at the last sign-in.
     if (error && isNetworkError(error)) {
-      const copy = await cacheGet<{ profile: Profile; myLocations: string[] }>('me');
+      const copy = await cacheGet<{ profile: Profile; myLocations: string[]; plan?: PlanInfo }>('me');
       if (copy) {
         setProfile(copy.value.profile);
         setMyLocations(copy.value.myLocations);
+        setPlan(copy.value.plan ?? FREE_INFO);
         setLoadedFor(userId);
         return;
       }
@@ -99,15 +105,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) setProfileError(error.message);
     const p = (data as Profile | null) ?? null;
     let ids: string[] = [];
+    let info = FREE_INFO;
     if (p?.role && p.is_active) {
-      const { data: rows } = await supabase.rpc('my_location_ids');
+      const [{ data: rows }, planInfo] = await Promise.all([
+        supabase.rpc('my_location_ids'),
+        getPlanInfo().catch(() => FREE_INFO),
+      ]);
       ids = ((rows ?? []) as (string | { my_location_ids: string })[]).map((r) =>
         typeof r === 'string' ? r : r.my_location_ids,
       );
+      info = planInfo;
     }
     setMyLocations(ids);
+    setPlan(info);
     setProfile(p);
-    if (p) cacheSet('me', { profile: p, myLocations: ids });
+    if (p) cacheSet('me', { profile: p, myLocations: ids, plan: info });
     setLoadedFor(userId);
   }, [userId]);
 
@@ -158,7 +170,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loading = sessionLoading || (!!userId && loadedFor !== userId);
 
   return (
-    <AuthContext.Provider value={{ session, profile, loading, profileError, myLocations, reloadProfile, signOut }}>
+    <AuthContext.Provider
+      value={{ session, profile, loading, profileError, myLocations, plan, reloadProfile, signOut }}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -166,9 +180,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export const useAuth = () => useContext(AuthContext);
 
+/** The member's role; a member locked by the plan works as an Onlooker (view only). */
 export function useRole(): Role | null {
-  const { profile } = useAuth();
-  return profile?.is_active ? profile.role : null;
+  const { profile, plan } = useAuth();
+  if (!profile?.is_active || !profile.role) return null;
+  return plan.locked && profile.role !== 'owner' ? 'onlooker' : profile.role;
 }
 
 /** Whether the signed-in member may use a location (Team Leader / "All locations" = every one). */
@@ -176,4 +192,11 @@ export function useLocationAccess(): (locationId: string | null | undefined) => 
   const { profile, myLocations } = useAuth();
   const all = profile?.role === 'owner' || !!profile?.all_locations;
   return (id) => !!id && (all || myLocations.includes(id));
+}
+
+/** Like useLocationAccess, but locations locked by the plan take no stock moves. */
+export function useMoveAccess(): (locationId: string | null | undefined) => boolean {
+  const canUse = useLocationAccess();
+  const { plan } = useAuth();
+  return (id) => canUse(id) && !plan.locked_locations.includes(id ?? '');
 }

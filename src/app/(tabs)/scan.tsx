@@ -19,7 +19,7 @@ import { RecentMoves, isRepeatable, type RecentFilter } from '../../components/R
 import { describeMove } from '../../components/HistoryList';
 import { Button, Card, Chip, Field, styles } from '../../components/ui';
 import { formatQty, listHistory, listLocations, listMyStock, listProducts, recordAdjustment } from '../../lib/api';
-import { useAuth, useLocationAccess, useRole } from '../../lib/auth';
+import { useAuth, useMoveAccess, useRole } from '../../lib/auth';
 import { cached, submitScan, useOnline, useQueue } from '../../lib/offline';
 import { useRecognition } from '../../lib/recognition';
 import { allowsDecimals, isSure, rankItems, splitName, type ItemMatch } from '../../lib/recognize';
@@ -37,8 +37,8 @@ const MODES: { kind: MovementKind; label: string }[] = [
 
 export default function ScanScreen() {
   const role = useRole();
-  const { profile, session } = useAuth();
-  const canUse = useLocationAccess();
+  const { profile, session, plan } = useAuth();
+  const canUse = useMoveAccess(); // locations locked by the plan take no moves
   const online = useOnline();
   const queue = useQueue();
   const modes = MODES.filter(
@@ -109,7 +109,7 @@ export default function ScanScreen() {
             cached('locations', listLocations),
             cached('products', listProducts),
           ]);
-          const list = locs.value;
+          const list = locs.value.filter((l) => !plan.locked_locations.includes(l.id));
           setLocations(list);
           setProducts(prods.value);
           // Source must be one of my locations; a transfer may go to any location.

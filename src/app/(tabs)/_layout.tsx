@@ -1,9 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router/js-tabs';
 import type { ComponentProps } from 'react';
-import { View, useWindowDimensions, type ColorValue } from 'react-native';
+import { Text, View, useWindowDimensions, type ColorValue } from 'react-native';
 import { BrandMark } from '../../components/BrandMark';
-import { useRole } from '../../lib/auth';
+import { useAuth, useRole } from '../../lib/auth';
 import { useBrand } from '../../lib/brand';
 import { can } from '../../lib/roles';
 import { colors, layout } from '../../lib/theme';
@@ -35,6 +35,18 @@ function SideTabs() {
   const role = useRole();
   const { count } = useUnread();
   const { companyName, theme } = useBrand();
+  const { plan } = useAuth();
+  const supporter =
+    plan.plan === 'supporter'
+      ? () => (
+          <Text
+            style={{ color: colors.primary, fontWeight: '800', marginHorizontal: 16 }}
+            accessibilityLabel="Supporter"
+          >
+            ★ Supporter
+          </Text>
+        )
+      : undefined;
   const { width } = useWindowDimensions();
   const wide = width >= 700;
   const side = layout.nav !== 'bottom';
@@ -84,7 +96,12 @@ function SideTabs() {
     >
       <Tabs.Screen
         name="index"
-        options={{ title: companyName || 'Home', tabBarLabel: 'Home', tabBarIcon: icon('home-outline') }}
+        options={{
+          title: companyName || 'Home',
+          tabBarLabel: 'Home',
+          tabBarIcon: icon('home-outline'),
+          headerRight: supporter,
+        }}
       />
       <Tabs.Screen
         name="inbox"

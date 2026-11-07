@@ -3,7 +3,7 @@ import { useCallback, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 import { Button, Empty, styles } from '../../components/ui';
 import { listTeam } from '../../lib/api';
-import { useRole } from '../../lib/auth';
+import { useAuth, useRole } from '../../lib/auth';
 import { can, ROLE_LABEL } from '../../lib/roles';
 import { colors } from '../../lib/theme';
 import { timeAgo } from '../../lib/time';
@@ -14,6 +14,7 @@ const REFRESH_MS = 30_000;
 export default function TeamScreen() {
   const role = useRole();
   const isOwner = can.manageUsers(role);
+  const { plan } = useAuth();
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,10 +52,17 @@ export default function TeamScreen() {
           </Text>
         </View>
         {isOwner && (
-          <Button
-            title="+ Add account"
-            onPress={() => router.push({ pathname: '/user/[id]', params: { id: 'new' } })}
-          />
+          <>
+            <Button
+              title="+ Add account"
+              onPress={() => router.push({ pathname: '/user/[id]', params: { id: 'new' } })}
+            />
+            <Text style={styles.muted}>
+              {plan.max_per_role === 1
+                ? 'Free plan: 1 Oversee, 1 Staff and 1 Onlooker. Pro: up to 20 of each.'
+                : `Up to ${plan.max_per_role} accounts per role.`}
+            </Text>
+          </>
         )}
         {error && <Text style={{ color: colors.out }}>{error}</Text>}
       </View>
@@ -83,6 +91,11 @@ export default function TeamScreen() {
                 {item.role === 'staff' ? (item.can_transfer ? ' · can transfer' : ' · no transfer') : ''}
                 {item.is_active ? '' : ' · disabled'}
               </Text>
+              {plan.locked_members.includes(item.id) && (
+                <Text style={{ color: colors.warn, fontWeight: '700', fontSize: 12 }}>
+                  🔒 LOCKED: view only until Pro is renewed
+                </Text>
+              )}
             </View>
             <Text style={{ color: item.online ? colors.online : colors.muted, fontWeight: '600' }}>
               {item.online ? 'Online' : timeAgo(item.last_seen_at)}

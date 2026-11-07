@@ -120,6 +120,12 @@ Set by the **Team Leader** in More → Theme & layout; everyone in the team gets
 - **Home page:** each section can be turned off and moved up or down.
 - Saved in `teams.theme`. Members get a new look the next time they open the app.
 
+## 7d. Plans (✅ codes; Google Play later)
+
+Free (1 location, 1 account per role), Pro Monthly $1, Pro Lifetime $10 (many locations, up to 20
+per role), Supporter $20 (Pro Lifetime + feature requests answered first + badge). When Pro ends,
+extras are locked, never deleted. Activated with codes for now. Details: `docs/PLANS.md`.
+
 ## 8. Export (🔨)
 
 Generated on the device and shared through Android's share menu (WhatsApp, email, Drive, print):
