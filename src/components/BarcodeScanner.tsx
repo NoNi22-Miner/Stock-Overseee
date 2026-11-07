@@ -1,7 +1,7 @@
 import { CameraView, useCameraPermissions, type BarcodeType } from 'expo-camera';
 import { extractTextFromImage, isSupported as ocrSupported } from 'expo-text-extractor';
 import { useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../lib/theme';
 import { Button } from './ui';
@@ -48,6 +48,7 @@ export function BarcodeScanner({
   const [problem, setProblem] = useState<string | null>(null);
   const handled = useRef(false);
   const camera = useRef<CameraView>(null);
+  const screen = useWindowDimensions();
 
   async function readWords() {
     if (!camera.current || reading) return;
@@ -106,7 +107,7 @@ export function BarcodeScanner({
                     }
               }
             />
-            <View style={[s.frame, wordsMode && s.frameWords]} pointerEvents="none" />
+            <View style={[s.frame, frameBox(screen.width, screen.height, wordsMode)]} pointerEvents="none" />
 
             <View style={s.top}>
               {onText && (
@@ -156,21 +157,23 @@ export function BarcodeScanner({
   );
 }
 
+/** A compact aiming box in the middle of the screen (never more than 80% of its width). */
+function frameBox(w: number, h: number, words: boolean) {
+  const width = Math.min(words ? 420 : 280, w * 0.8);
+  const height = Math.min(words ? 180 : 140, h * 0.3);
+  return { width, height, left: (w - width) / 2, top: (h - height) / 2 };
+}
+
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
   center: { flex: 1, justifyContent: 'center', padding: 24, gap: 12 },
   msg: { color: '#fff', fontSize: 16, textAlign: 'center' },
   frame: {
     position: 'absolute',
-    left: '10%',
-    right: '10%',
-    top: '35%',
-    height: '22%',
     borderWidth: 3,
     borderColor: colors.primaryText,
-    borderRadius: 16,
+    borderRadius: 14,
   },
-  frameWords: { left: '6%', right: '6%', top: '30%', height: '30%' },
   top: { position: 'absolute', top: 24, left: 16, right: 16, alignItems: 'center', gap: 10 },
   modeRow: { flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 999, padding: 4 },
   modeBtn: { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 999 },
