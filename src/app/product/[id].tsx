@@ -1,17 +1,17 @@
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, Switch, TextInput, View } from 'react-native';
 import { BarcodeScanner } from '../../components/BarcodeScanner';
 import { HistoryItem } from '../../components/HistoryList';
 import { PartChips, type ChipOption } from '../../components/PartChips';
-import { Button, Card, Chip, Field, styles } from '../../components/ui';
+import { Button, Card, Chip, Field, styles, Text } from '../../components/ui';
 import { formatQty, getProduct, listHistory, listProducts, saveProduct, stockForProduct } from '../../lib/api';
 import { useRole } from '../../lib/auth';
 import { cached } from '../../lib/offline';
 import { useRecognition } from '../../lib/recognition';
 import { buildName, finishSize, fitToPattern, patternText, splitName, UNITS } from '../../lib/recognize';
 import { can } from '../../lib/roles';
-import { colors } from '../../lib/theme';
+import { colors, fs } from '../../lib/theme';
 import type { MovementRow, Product, SizeBox, StockRow, TermKind } from '../../lib/types';
 
 export default function ProductScreen() {
@@ -217,7 +217,7 @@ export default function ProductScreen() {
           <Text style={styles.label}>Stock</Text>
           <View style={[styles.chipRow, { gap: 16 }]}>
             {stock.map((s) => (
-              <Text key={s.location_id} style={{ fontSize: 16, color: s.is_low ? colors.warn : colors.text }}>
+              <Text key={s.location_id} style={{ fontSize: fs(16), color: s.is_low ? colors.warn : colors.text }}>
                 {s.location_code}: <Text style={{ fontWeight: '800' }}>{formatQty(s.qty)}</Text> {s.unit}
                 {s.is_low ? ' (low)' : ''}
               </Text>
@@ -228,7 +228,7 @@ export default function ProductScreen() {
 
       <Card style={{ borderColor: colors.primary }}>
         <Text style={styles.label}>Name</Text>
-        <Text style={[styles.title, { fontSize: 18 }]}>{preview || '…'}</Text>
+        <Text style={[styles.title, { fontSize: fs(18) }]}>{preview || '…'}</Text>
         {structured ? (
           <Text style={styles.muted}>Built from the parts below: Category Grade · Labels · Size · Brand Mark</Text>
         ) : (
@@ -420,7 +420,7 @@ export default function ProductScreen() {
         {editable && <Button title="Scan" variant="outline" onPress={() => setCamera(true)} />}
       </View>
       <View style={[styles.row, { justifyContent: 'space-between' }]}>
-        <Text style={{ color: colors.text, fontSize: 16 }}>Active</Text>
+        <Text style={{ color: colors.text, fontSize: fs(16) }}>Active</Text>
         <Switch value={active} onValueChange={setActive} disabled={!editable} />
       </View>
       {editable && (

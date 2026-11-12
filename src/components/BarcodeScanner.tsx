@@ -2,10 +2,10 @@ import { CameraView, useCameraPermissions, type BarcodeType } from 'expo-camera'
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { extractTextFromImage, isSupported as ocrSupported } from 'expo-text-extractor';
 import { useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, themed } from '../lib/theme';
-import { Button } from './ui';
+import { colors, fs, themed } from '../lib/theme';
+import { Button, Text } from './ui';
 
 const BARCODE_TYPES: BarcodeType[] = [
   'ean13',
@@ -220,7 +220,7 @@ const s = themed(() =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: '#000' },
     center: { flex: 1, justifyContent: 'center', padding: 24, gap: 12 },
-    msg: { color: '#fff', fontSize: 16, textAlign: 'center' },
+    msg: { color: '#fff', fontSize: fs(16), textAlign: 'center' },
     frame: { position: 'absolute', borderWidth: 3, borderColor: colors.primaryText, borderRadius: 14 },
     top: { position: 'absolute', top: 24, left: 16, right: 16, alignItems: 'center', gap: 10 },
     modeRow: { flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 999, padding: 4 },
@@ -228,7 +228,7 @@ const s = themed(() =>
     modeBtnActive: { backgroundColor: '#fff' },
     modeText: { color: '#fff', fontWeight: '700' },
     modeTextActive: { color: colors.text },
-    hint: { color: '#fff', fontSize: 15, textAlign: 'center' },
+    hint: { color: '#fff', fontSize: fs(15), textAlign: 'center' },
     problem: {
       color: '#fff',
       backgroundColor: 'rgba(198,40,40,0.85)',
@@ -249,6 +249,6 @@ const s = themed(() =>
     },
     barBtn: { backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 999 },
     readBtn: { backgroundColor: colors.primary, paddingHorizontal: 28, minWidth: 130, alignItems: 'center' },
-    barText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+    barText: { color: '#fff', fontWeight: '600', fontSize: fs(16) },
   }),
 );

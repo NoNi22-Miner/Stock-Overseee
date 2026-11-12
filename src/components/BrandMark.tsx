@@ -1,6 +1,7 @@
-import { Image, Text, View } from 'react-native';
+import { Image, View } from 'react-native';
 import { useBrand } from '../lib/brand';
-import { colors } from '../lib/theme';
+import { colors, fs } from '../lib/theme';
+import { Text } from './ui';
 
 /** The company logo (and name) from the team's branding. Nothing when there is no logo. */
 export function BrandMark({ size = 28, showName = false }: { size?: number; showName?: boolean }) {
@@ -20,7 +21,10 @@ export function BrandMark({ size = 28, showName = false }: { size?: number; show
         </View>
       )}
       {showName && companyName && (
-        <Text style={{ color: colors.text, fontWeight: '800', fontSize: Math.max(16, size * 0.6) }} numberOfLines={1}>
+        <Text
+          style={{ color: colors.text, fontWeight: '800', fontSize: fs(Math.max(16, size * 0.6)) }}
+          numberOfLines={1}
+        >
           {companyName}
         </Text>
       )}

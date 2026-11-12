@@ -1,7 +1,7 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { useAuth } from '../lib/auth';
 import type { Location } from '../lib/types';
-import { Chip, styles } from './ui';
+import { Chip, styles, Text } from './ui';
 
 export function LocationPicker({
   label,

@@ -1,8 +1,8 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { formatQty } from '../lib/api';
-import { colors, kindColor } from '../lib/theme';
+import { colors, fs, kindColor } from '../lib/theme';
 import type { MovementRow } from '../lib/types';
-import { styles } from './ui';
+import { styles, Text } from './ui';
 
 export function describeMove(m: MovementRow) {
   if (m.kind === 'ADJUST') return `ADJUST ${m.to_code ?? m.from_code}`;
@@ -20,7 +20,7 @@ export function HistoryItem({ item, showProduct = true }: { item: MovementRow; s
     <View style={[styles.card, { borderLeftWidth: 5, borderLeftColor: color }]}>
       <View style={styles.row}>
         <Text style={{ color, fontWeight: '800', flex: 1 }}>{describeMove(item)}</Text>
-        <Text style={{ fontWeight: '800', fontSize: 16, color: colors.text }}>
+        <Text style={{ fontWeight: '800', fontSize: fs(16), color: colors.text }}>
           {item.kind === 'ADJUST' && item.qty_before != null && item.qty_after != null
             ? `${formatQty(item.qty_before)} → ${formatQty(item.qty_after)}`
             : `${item.kind === 'OUT' ? '−' : item.kind === 'IN' ? '+' : ''}${formatQty(item.qty)}`}{' '}

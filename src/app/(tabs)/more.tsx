@@ -1,8 +1,8 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, ScrollView, Switch, Text, View } from 'react-native';
+import { Alert, ScrollView, Switch, View } from 'react-native';
 import { PlanCard } from '../../components/PlanCard';
-import { Button, Card, Chip, Field, styles } from '../../components/ui';
+import { Button, Card, Chip, Field, styles, Text } from '../../components/ui';
 import {
   addLocation,
   getMyTeam,
@@ -16,7 +16,7 @@ import { useAuth, useRole } from '../../lib/auth';
 import { useQueue } from '../../lib/offline';
 import { can, ROLE_LABEL } from '../../lib/roles';
 import { supabase } from '../../lib/supabase';
-import { colors } from '../../lib/theme';
+import { colors, fs } from '../../lib/theme';
 import type { Location, LocationKind, Team } from '../../lib/types';
 
 const KINDS: { kind: LocationKind; label: string }[] = [
@@ -151,7 +151,7 @@ export default function MoreScreen() {
             </Text>
             <Text style={styles.muted}>{l.name}</Text>
             {plan.locked_locations.includes(l.id) && (
-              <Text style={{ color: colors.warn, fontWeight: '700', fontSize: 12 }}>
+              <Text style={{ color: colors.warn, fontWeight: '700', fontSize: fs(12) }}>
                 🔒 LOCKED: view only until Pro is renewed
               </Text>
             )}
@@ -202,6 +202,7 @@ export default function MoreScreen() {
             : 'Signs in with email'}
           {role ? `  ·  ${ROLE_LABEL[role]}` : ''}
         </Text>
+        <Button title="Text & icon size" variant="outline" onPress={() => router.push('/display')} />
         <Button
           title="Sign out"
           variant="outline"
@@ -225,7 +226,7 @@ export default function MoreScreen() {
       <Card style={{ gap: 6 }}>
         <View style={[styles.row, { justifyContent: 'space-between' }]}>
           <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.text, fontSize: 16 }}>Every stock change</Text>
+            <Text style={{ color: colors.text, fontSize: fs(16) }}>Every stock change</Text>
             <Text style={styles.muted}>
               In / Out / count at my locations. Transfers and low stock are always notified.
             </Text>

@@ -6,7 +6,7 @@ import { ActivityIndicator, Platform, View } from 'react-native';
 import { AuthProvider, useAuth } from '../lib/auth';
 import { BrandProvider, takePendingRoute } from '../lib/brand';
 import { routeForNotification } from '../lib/push';
-import { colors } from '../lib/theme';
+import { colors, fs } from '../lib/theme';
 
 /** Opens the transfer / product a tapped phone notification is about. */
 function NotificationTaps({ ready }: { ready: boolean }) {
@@ -55,7 +55,7 @@ function RootStack() {
         screenOptions={{
           headerTintColor: colors.primary,
           headerStyle: { backgroundColor: colors.card },
-          headerTitleStyle: { color: colors.text },
+          headerTitleStyle: { color: colors.text, fontSize: fs(18) },
           contentStyle: { backgroundColor: colors.bg },
         }}
       >
@@ -68,6 +68,7 @@ function RootStack() {
           <Stack.Screen name="transfer/[id]" options={{ title: 'Transfer' }} />
           <Stack.Screen name="queue" options={{ title: 'Waiting to sync' }} />
           <Stack.Screen name="branding" options={{ title: 'Theme & layout' }} />
+          <Stack.Screen name="display" options={{ title: 'Text & icon size' }} />
           <Stack.Screen name="plans" options={{ title: 'Plans' }} />
           <Stack.Screen name="requests" options={{ title: 'Feature requests' }} />
           <Stack.Screen name="developer" options={{ title: 'Developer' }} />

@@ -1,7 +1,7 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, FlatList, Text, View } from 'react-native';
-import { Button, Card, Field, styles } from '../components/ui';
+import { Alert, FlatList, View } from 'react-native';
+import { Button, Card, Field, styles, Text } from '../components/ui';
 import { useAuth, useRole } from '../lib/auth';
 import { listMyRequests, sendRequest, STATUS_LABEL, statusColor, type FeatureRequest } from '../lib/plan';
 import { colors } from '../lib/theme';

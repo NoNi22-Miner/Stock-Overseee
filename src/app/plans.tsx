@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Alert, ScrollView, Text, TextInput, View } from 'react-native';
-import { Button, Card, styles } from '../components/ui';
+import { Alert, ScrollView, TextInput, View } from 'react-native';
+import { Button, Card, styles, Text } from '../components/ui';
 import { useAuth, useRole } from '../lib/auth';
 import { getContact, planLabel, PRICES, redeemCode } from '../lib/plan';
 import { can } from '../lib/roles';
-import { colors } from '../lib/theme';
+import { colors, fs } from '../lib/theme';
 
 const PLANS = [
   {
@@ -93,7 +93,7 @@ export default function PlansScreen() {
                 <Text style={styles.title}>{p.name}</Text>
                 {here && <Text style={{ color: colors.primary, fontWeight: '800' }}>Your plan</Text>}
               </View>
-              <Text style={{ color: colors.text, fontSize: 26, fontWeight: '800' }}>
+              <Text style={{ color: colors.text, fontSize: fs(26), fontWeight: '800' }}>
                 {p.price} <Text style={styles.muted}>{p.per}</Text>
               </Text>
               {p.points.map((t) => (

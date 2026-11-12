@@ -1,11 +1,11 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, Text, TextInput, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, TextInput, View } from 'react-native';
 import { LocationPicker } from '../../components/LocationPicker';
-import { Chip, Empty, styles } from '../../components/ui';
+import { Chip, Empty, styles, Text } from '../../components/ui';
 import { formatQty, listLocations, lowStockCounts, stockAtLocation } from '../../lib/api';
 import { useLocationAccess } from '../../lib/auth';
-import { colors } from '../../lib/theme';
+import { colors, fs } from '../../lib/theme';
 import type { Location, StockRow } from '../../lib/types';
 
 export default function StockScreen() {
@@ -103,7 +103,7 @@ export default function StockScreen() {
               </Text>
               {item.is_low && <Text style={{ color: colors.warn, fontWeight: '700' }}>Low stock</Text>}
             </View>
-            <Text style={{ fontSize: 22, fontWeight: '800', color: item.is_low ? colors.warn : colors.text }}>
+            <Text style={{ fontSize: fs(22), fontWeight: '800', color: item.is_low ? colors.warn : colors.text }}>
               {formatQty(item.qty)}
               <Text style={styles.muted}> {item.unit}</Text>
             </Text>

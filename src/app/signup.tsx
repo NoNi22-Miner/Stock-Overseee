@@ -1,10 +1,10 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, Field, styles } from '../components/ui';
+import { Button, Field, styles, Text } from '../components/ui';
 import { supabase } from '../lib/supabase';
-import { colors } from '../lib/theme';
+import { colors, fs } from '../lib/theme';
 
 /** Team Leader sign-up with email. Team members get accounts from their Team Leader instead. */
 export default function SignUp() {
@@ -37,7 +37,7 @@ export default function SignUp() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={{ gap: 4, marginBottom: 8 }}>
-            <Text style={{ fontSize: 26, fontWeight: '800', color: colors.text }}>Team Leader sign up</Text>
+            <Text style={{ fontSize: fs(26), fontWeight: '800', color: colors.text }}>Team Leader sign up</Text>
             <Text style={styles.muted}>
               Create your own team. You can then add Oversee, Staff and Onlooker accounts for your people.
             </Text>

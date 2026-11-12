@@ -1,13 +1,13 @@
 import { Link } from 'expo-router';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BrandMark } from '../components/BrandMark';
-import { Button, Field, styles } from '../components/ui';
+import { Button, Field, styles, Text } from '../components/ui';
 import { resolveLogin } from '../lib/api';
 import { useBrand } from '../lib/brand';
 import { supabase } from '../lib/supabase';
-import { colors } from '../lib/theme';
+import { colors, fs } from '../lib/theme';
 
 /** One login panel for everyone: UserID, Username or email + password. */
 export default function Login() {
@@ -47,7 +47,7 @@ export default function Login() {
         >
           <View style={{ gap: 8, marginBottom: 12 }}>
             {theme.logo && <BrandMark size={56} />}
-            <Text style={{ fontSize: 28, fontWeight: '800', color: colors.text }}>
+            <Text style={{ fontSize: fs(28), fontWeight: '800', color: colors.text }}>
               {companyName ?? 'Stock Overseee'}
             </Text>
             <Text style={styles.muted}>
@@ -76,7 +76,7 @@ export default function Login() {
 
           <View style={{ alignItems: 'center', gap: 6, marginTop: 8 }}>
             <Text style={styles.muted}>Team members: ask your Team Leader for a UserID.</Text>
-            <Link href="/signup" style={{ color: colors.primary, fontWeight: '700', fontSize: 15, padding: 6 }}>
+            <Link href="/signup" style={{ color: colors.primary, fontWeight: '700', fontSize: fs(15), padding: 6 }}>
               New Team Leader? Sign up with email
             </Link>
           </View>

@@ -1,8 +1,8 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, View, type LayoutChangeEvent } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, View, type LayoutChangeEvent } from 'react-native';
 import { compact, DailyColumns, RankedBars, StatTile, chart } from '../../components/charts';
-import { Card, Chip, styles } from '../../components/ui';
+import { Card, Chip, styles, Text } from '../../components/ui';
 import {
   byCategory,
   scopeToCategory,
@@ -15,7 +15,7 @@ import {
   type Metric,
   type MonthStats,
 } from '../../lib/stats';
-import { colors, layout, themed, type HomeKey } from '../../lib/theme';
+import { colors, fs, layout, themed, type HomeKey } from '../../lib/theme';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const MONTHS_LONG = [
@@ -218,7 +218,7 @@ export default function HomeScreen() {
           <Pressable onPress={() => shift(-1)} style={navBtn} accessibilityLabel="Previous month" hitSlop={8}>
             <Text style={navText}>‹</Text>
           </Pressable>
-          <Text style={[styles.title, { fontSize: 20, minWidth: 150, textAlign: 'center' }]}>
+          <Text style={[styles.title, { fontSize: fs(20), minWidth: 150, textAlign: 'center' }]}>
             {MONTHS_LONG[ym.m]} {ym.y}
           </Text>
           <Pressable
@@ -274,4 +274,4 @@ const navBtn = themed(() => ({
   alignItems: 'center' as const,
   justifyContent: 'center' as const,
 }));
-const navText = themed(() => ({ fontSize: 22, color: chart.ink, marginTop: -2 }));
+const navText = themed(() => ({ fontSize: fs(22), color: chart.ink, marginTop: -2 }));

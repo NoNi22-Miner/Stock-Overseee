@@ -1,8 +1,8 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { RefreshControl, ScrollView, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, View } from 'react-native';
 import { TransferCard } from '../../components/TransferCard';
-import { Chip, Empty, styles } from '../../components/ui';
+import { Chip, Empty, styles, Text } from '../../components/ui';
 import { listTransfers } from '../../lib/api';
 import { useLocationAccess } from '../../lib/auth';
 import { colors } from '../../lib/theme';

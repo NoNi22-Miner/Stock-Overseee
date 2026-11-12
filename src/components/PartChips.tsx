@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { colors } from '../lib/theme';
-import { Chip, styles } from './ui';
+import { Chip, styles, Text } from './ui';
 
 export type ChipOption = { id: string; name: string; hint?: string };
 

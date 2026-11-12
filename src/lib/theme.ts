@@ -199,6 +199,28 @@ export function homeSections(saved: HomeSection[] | undefined): HomeSection[] {
   return list;
 }
 
+// Text and icon size: each person's own choice on their phone (More → Text & icon size) -----------
+
+export const SIZE_STEPS = [
+  { key: 'small', label: 'Small', scale: 0.9 },
+  { key: 'normal', label: 'Normal', scale: 1 },
+  { key: 'large', label: 'Large', scale: 1.15 },
+  { key: 'xlarge', label: 'Extra large', scale: 1.3 },
+] as const;
+export type SizeStep = (typeof SIZE_STEPS)[number]['key'];
+export type DisplayPrefs = { text: SizeStep; icons: SizeStep };
+export const DEFAULT_DISPLAY: DisplayPrefs = { text: 'normal', icons: 'normal' };
+
+export const stepScale = (step: SizeStep | undefined) => SIZE_STEPS.find((s) => s.key === step)?.scale ?? 1;
+
+/** The current multipliers (1 = normal). */
+export const sizing = { text: 1, icon: 1 };
+
+/** A text size at the person's chosen scale: `fontSize: fs(16)`. */
+export const fs = (n: number) => Math.round(n * sizing.text * 2) / 2;
+/** An icon size at the person's chosen scale. */
+export const is = (n: number) => Math.round(n * sizing.icon);
+
 // Live values (read by every screen) ------------------------------------------------------------------
 
 export const colors: Palette = paletteFor({});
@@ -226,6 +248,13 @@ export function themed<T extends object>(make: () => T): T {
   build();
   rebuilders.add(build);
   return target;
+}
+
+/** Puts a person's text / icon size into the live values. The caller then draws the app again. */
+export function applyDisplay(prefs: Partial<DisplayPrefs> | null | undefined) {
+  sizing.text = stepScale(prefs?.text);
+  sizing.icon = stepScale(prefs?.icons);
+  rebuilders.forEach((b) => b());
 }
 
 /** Puts a team's theme into the live values. The caller then draws the app again. */

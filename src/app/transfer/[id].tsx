@@ -1,12 +1,12 @@
 import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, TextInput, View } from 'react-native';
 import { STATUS_LABEL, transferSummary } from '../../components/TransferCard';
-import { Button, Card, Chip, Field, styles } from '../../components/ui';
+import { Button, Card, Chip, Field, styles, Text } from '../../components/ui';
 import { formatQty, getTransfer, receiveTransfer, resolveTransfer, type ResolveOutcome } from '../../lib/api';
 import { useAuth, useLocationAccess, useRole } from '../../lib/auth';
 import { can } from '../../lib/roles';
-import { colors } from '../../lib/theme';
+import { colors, fs } from '../../lib/theme';
 import type { Transfer } from '../../lib/types';
 
 /** One transfer: receive it (all or fewer), or resolve the missing items of a short one. */
@@ -88,9 +88,9 @@ export default function TransferScreen() {
 
       <Card>
         <Text style={styles.label}>{STATUS_LABEL[t.status]}</Text>
-        <Text style={[styles.title, { fontSize: 20 }]}>{t.product_name}</Text>
+        <Text style={[styles.title, { fontSize: fs(20) }]}>{t.product_name}</Text>
         <Text style={styles.muted}>{t.barcode}</Text>
-        <Text style={{ color: colors.text, fontSize: 16, marginTop: 4 }}>{transferSummary(t)}</Text>
+        <Text style={{ color: colors.text, fontSize: fs(16), marginTop: 4 }}>{transferSummary(t)}</Text>
       </Card>
 
       <Card style={{ gap: 4 }}>
@@ -126,7 +126,7 @@ export default function TransferScreen() {
           />
           <Text style={styles.muted}>Fewer arrived? Enter how many:</Text>
           <TextInput
-            style={[styles.input, { fontSize: 20, fontWeight: '700', textAlign: 'center' }]}
+            style={[styles.input, { fontSize: fs(20), fontWeight: '700', textAlign: 'center' }]}
             keyboardType="decimal-pad"
             value={qty}
             onChangeText={setQty}
@@ -154,7 +154,7 @@ export default function TransferScreen() {
             ))}
           </View>
           <TextInput
-            style={[styles.input, { fontSize: 20, fontWeight: '700', textAlign: 'center' }]}
+            style={[styles.input, { fontSize: fs(20), fontWeight: '700', textAlign: 'center' }]}
             keyboardType="decimal-pad"
             value={qty}
             onChangeText={setQty}

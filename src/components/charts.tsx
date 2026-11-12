@@ -2,10 +2,11 @@
 // Specs: one hue, bars <= 24px with a 4px rounded data end (square at the baseline),
 // a 2px gap between touching columns, hairline gridlines, text in ink colors only.
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
-import { chart, colors, themed } from '../lib/theme';
+import { Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { chart, colors, fs, themed } from '../lib/theme';
 import { formatQty } from '../lib/api';
 import type { DayStat, Metric } from '../lib/stats';
+import { Text } from './ui';
 
 export { chart };
 
@@ -171,7 +172,7 @@ export function DailyColumns({
         </View>
       </View>
       {/* X axis day labels */}
-      <View style={{ height: 16, marginLeft: Y_AXIS_W }}>
+      <View style={{ height: Math.max(16, fs(10) + 6), marginLeft: Y_AXIS_W }}>
         {ticks.map((d) => (
           <Text key={d} style={[s.xTick, { left: (d - 0.5) * slot - 12 }]}>
             {d}
@@ -194,13 +195,13 @@ const s = themed(() =>
       padding: 14,
       gap: 2,
     },
-    tileLabel: { color: chart.inkSecondary, fontSize: 13, fontWeight: '600' },
-    tileValue: { color: chart.ink, fontSize: 26, fontWeight: '700' },
-    tileNote: { color: chart.inkMuted, fontSize: 12 },
+    tileLabel: { color: chart.inkSecondary, fontSize: fs(13), fontWeight: '600' },
+    tileValue: { color: chart.ink, fontSize: fs(26), fontWeight: '700' },
+    tileNote: { color: chart.inkMuted, fontSize: fs(12) },
     empty: { color: chart.inkMuted, paddingVertical: 12 },
-    rankLabel: { color: chart.ink, fontSize: 14, fontWeight: '600' },
+    rankLabel: { color: chart.ink, fontSize: fs(14), fontWeight: '600' },
     rankNo: { color: chart.inkMuted, fontWeight: '600' },
-    rankBarRow: { flexDirection: 'row', alignItems: 'center', gap: 8, height: 16 },
+    rankBarRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 16 },
     rankBar: {
       height: 12,
       backgroundColor: chart.bar,
@@ -208,10 +209,10 @@ const s = themed(() =>
       borderBottomRightRadius: 4,
       minWidth: 2,
     },
-    rankValue: { color: chart.ink, fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] },
+    rankValue: { color: chart.ink, fontSize: fs(13), fontWeight: '700', fontVariant: ['tabular-nums'] },
     rankUnit: { color: chart.inkMuted, fontWeight: '400' },
-    readout: { color: chart.inkSecondary, fontSize: 12, marginBottom: 6, minHeight: 16 },
-    yTick: { position: 'absolute', right: 6, color: chart.inkMuted, fontSize: 10, fontVariant: ['tabular-nums'] },
+    readout: { color: chart.inkSecondary, fontSize: fs(12), marginBottom: 6, minHeight: fs(16) },
+    yTick: { position: 'absolute', right: 6, color: chart.inkMuted, fontSize: fs(10), fontVariant: ['tabular-nums'] },
     grid: { position: 'absolute', left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: chart.grid },
     baseline: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: chart.axis },
     xTick: {
@@ -219,7 +220,7 @@ const s = themed(() =>
       width: 24,
       textAlign: 'center',
       color: chart.inkMuted,
-      fontSize: 10,
+      fontSize: fs(10),
       fontVariant: ['tabular-nums'],
     },
   }),

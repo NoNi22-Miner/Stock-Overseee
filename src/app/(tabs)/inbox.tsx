@@ -1,7 +1,7 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
-import { Button, Empty, styles } from '../../components/ui';
+import { FlatList, Pressable, RefreshControl, View } from 'react-native';
+import { Button, Empty, styles, Text } from '../../components/ui';
 import { listNotifications, markNotificationsRead } from '../../lib/api';
 import { colors, themed } from '../../lib/theme';
 import { timeAgo } from '../../lib/time';

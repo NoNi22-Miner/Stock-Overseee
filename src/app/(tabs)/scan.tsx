@@ -6,7 +6,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  Text,
   TextInput,
   View,
   type LayoutChangeEvent,
@@ -17,14 +16,14 @@ import { ItemPicker } from '../../components/ItemPicker';
 import { LocationPicker } from '../../components/LocationPicker';
 import { RecentMoves, isRepeatable, type RecentFilter } from '../../components/RecentMoves';
 import { describeMove } from '../../components/HistoryList';
-import { Button, Card, Chip, Field, styles } from '../../components/ui';
+import { Button, Card, Chip, Field, styles, Text } from '../../components/ui';
 import { formatQty, listHistory, listLocations, listMyStock, listProducts, recordAdjustment } from '../../lib/api';
 import { useAuth, useMoveAccess, useRole } from '../../lib/auth';
 import { cached, submitScan, useOnline, useQueue } from '../../lib/offline';
 import { useRecognition } from '../../lib/recognition';
 import { allowsDecimals, isSure, rankItems, splitName, type ItemMatch } from '../../lib/recognize';
 import { can } from '../../lib/roles';
-import { colors, kindColor } from '../../lib/theme';
+import { colors, fs, kindColor } from '../../lib/theme';
 import { timeAgo } from '../../lib/time';
 import type { Location, MovementKind, MovementRow, Product, StockRow } from '../../lib/types';
 
@@ -593,7 +592,7 @@ export default function ScanScreen() {
             <View style={styles.row}>
               <Button title="−" variant="outline" onPress={() => step(-1)} style={{ width: 56 }} />
               <TextInput
-                style={[styles.input, { flex: 1, textAlign: 'center', fontSize: 22, fontWeight: '700' }]}
+                style={[styles.input, { flex: 1, textAlign: 'center', fontSize: fs(22), fontWeight: '700' }]}
                 keyboardType={allowsDecimals(product.unit) ? 'decimal-pad' : 'number-pad'}
                 value={qty}
                 onChangeText={setQty}
@@ -668,7 +667,10 @@ function MatchRow({ m, onPress }: { m: ItemMatch; onPress: () => void }) {
         {checks.length > 0 && (
           <View style={[styles.row, { flexWrap: 'wrap', gap: 6 }]}>
             {checks.map(([k, v]) => (
-              <Text key={k} style={{ fontSize: 12, fontWeight: '700', color: v === 'match' ? colors.in : colors.out }}>
+              <Text
+                key={k}
+                style={{ fontSize: fs(12), fontWeight: '700', color: v === 'match' ? colors.in : colors.out }}
+              >
                 {v === 'match' ? '✓' : '✗'} {PART_LABEL[k]}
                 {k === 'size' && v === 'differs' ? ' differs' : ''}
               </Text>

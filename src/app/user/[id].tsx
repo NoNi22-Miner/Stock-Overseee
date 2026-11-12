@@ -1,11 +1,11 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, Switch, Text, View } from 'react-native';
-import { Button, Card, Chip, Field, styles } from '../../components/ui';
+import { ActivityIndicator, Alert, ScrollView, Switch, View } from 'react-native';
+import { Button, Card, Chip, Field, styles, Text } from '../../components/ui';
 import { getTeamMember, listLocations, manageUser } from '../../lib/api';
 import { useRole } from '../../lib/auth';
 import { can, ROLE_INFO, ROLE_LABEL, type Role } from '../../lib/roles';
-import { colors } from '../../lib/theme';
+import { colors, fs } from '../../lib/theme';
 import { timeAgo } from '../../lib/time';
 import type { Location, TeamMember } from '../../lib/types';
 
@@ -210,7 +210,7 @@ export default function UserScreen() {
           {role === 'staff' && (
             <View style={[styles.row, { justifyContent: 'space-between', marginTop: 4 }]}>
               <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.text, fontSize: 16 }}>Allow Transfer</Text>
+                <Text style={{ color: colors.text, fontSize: fs(16) }}>Allow Transfer</Text>
                 <Text style={styles.muted}>Move stock between locations (e.g. WRH → TOKO)</Text>
               </View>
               <Switch value={canTransfer} onValueChange={setCanTransfer} />
@@ -220,7 +220,7 @@ export default function UserScreen() {
           <Text style={[styles.label, { marginTop: 8 }]}>Locations</Text>
           <View style={[styles.row, { justifyContent: 'space-between' }]}>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: colors.text, fontSize: 16 }}>All locations</Text>
+              <Text style={{ color: colors.text, fontSize: fs(16) }}>All locations</Text>
               <Text style={styles.muted}>Off = only the locations picked below</Text>
             </View>
             <Switch value={allLocations} onValueChange={setAllLocations} />
@@ -275,7 +275,7 @@ export default function UserScreen() {
           {!isOwnerAccount && (
             <View style={[styles.row, { justifyContent: 'space-between' }]}>
               <View>
-                <Text style={{ color: colors.text, fontSize: 16 }}>Active</Text>
+                <Text style={{ color: colors.text, fontSize: fs(16) }}>Active</Text>
                 <Text style={styles.muted}>Off = cannot sign in or see anything</Text>
               </View>
               <Switch value={active} onValueChange={setActive} />

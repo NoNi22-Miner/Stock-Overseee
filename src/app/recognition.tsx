@@ -1,14 +1,14 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
-import { Button, Card, Chip, Field, styles } from '../components/ui';
+import { Alert, FlatList, Pressable, ScrollView, Switch, TextInput, View } from 'react-native';
+import { Button, Card, Chip, Field, styles, Text } from '../components/ui';
 import { deleteCategory, deleteTerm, listProducts, saveCategory, saveTerm } from '../lib/api';
 import { useRole } from '../lib/auth';
 import { cached } from '../lib/offline';
 import { useRecognition } from '../lib/recognition';
 import { patternText, UNITS } from '../lib/recognize';
 import { can } from '../lib/roles';
-import { colors } from '../lib/theme';
+import { colors, fs } from '../lib/theme';
 import type { Category, Product, SizeBox, Term, TermKind } from '../lib/types';
 
 type Tab = 'category' | TermKind;
@@ -198,7 +198,7 @@ export default function RecognitionScreen() {
                   hitSlop={8}
                   onPress={() => setDraft({ ...draft, pattern: draft.pattern.filter((_, j) => j !== i) })}
                 >
-                  <Text style={{ color: colors.out, fontWeight: '800', fontSize: 18 }}>✕</Text>
+                  <Text style={{ color: colors.out, fontWeight: '800', fontSize: fs(18) }}>✕</Text>
                 </Pressable>
               </View>
               <View style={styles.row}>

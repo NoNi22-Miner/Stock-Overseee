@@ -1,10 +1,10 @@
 import { router } from 'expo-router';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { useAuth, useRole } from '../lib/auth';
 import { isPro, planLabel } from '../lib/plan';
 import { can } from '../lib/roles';
 import { colors } from '../lib/theme';
-import { Button, Card, styles } from './ui';
+import { Button, Card, styles, Text } from './ui';
 
 const date = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });

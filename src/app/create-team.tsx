@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, Field, styles } from '../components/ui';
+import { Button, Field, styles, Text } from '../components/ui';
 import { createTeam } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { colors } from '../lib/theme';
+import { colors, fs } from '../lib/theme';
 
 /** First sign-in of a new Team Leader: name the team. */
 export default function CreateTeam() {
@@ -33,7 +33,7 @@ export default function CreateTeam() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={{ gap: 4 }}>
-            <Text style={{ fontSize: 26, fontWeight: '800', color: colors.text }}>Create your team</Text>
+            <Text style={{ fontSize: fs(26), fontWeight: '800', color: colors.text }}>Create your team</Text>
             <Text style={styles.muted}>
               You will be the Team Leader. Locations WRH and TOKO are added for you; you can add more later.
             </Text>

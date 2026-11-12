@@ -1,8 +1,8 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { FlatList, RefreshControl, Text, View } from 'react-native';
+import { FlatList, RefreshControl, View } from 'react-native';
 import { HistoryItem } from '../../components/HistoryList';
-import { Chip, Empty, styles } from '../../components/ui';
+import { Chip, Empty, styles, Text } from '../../components/ui';
 import { listHistory, listLocations } from '../../lib/api';
 import { useLocationAccess } from '../../lib/auth';
 import { colors, kindColor } from '../../lib/theme';

@@ -1,7 +1,7 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, ScrollView, Share, Text, TextInput, View } from 'react-native';
-import { Button, Card, Chip, Field, styles } from '../components/ui';
+import { Alert, ScrollView, Share, TextInput, View } from 'react-native';
+import { Button, Card, Chip, Field, styles, Text } from '../components/ui';
 import { useAuth } from '../lib/auth';
 import {
   codeLabel,
@@ -16,7 +16,7 @@ import {
   type PlanKey,
   type RequestStatus,
 } from '../lib/plan';
-import { colors } from '../lib/theme';
+import { colors, fs } from '../lib/theme';
 import { timeAgo } from '../lib/time';
 
 type Tab = 'requests' | 'codes' | 'teams' | 'contact';
@@ -162,7 +162,7 @@ export default function DeveloperScreen() {
                 <Text
                   key={c}
                   selectable
-                  style={{ color: colors.text, fontSize: 20, fontWeight: '800', letterSpacing: 2 }}
+                  style={{ color: colors.text, fontSize: fs(20), fontWeight: '800', letterSpacing: 2 }}
                 >
                   {c}
                 </Text>

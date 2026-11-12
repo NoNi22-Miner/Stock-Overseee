@@ -1,11 +1,11 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
-import { Button, Empty, styles } from '../../components/ui';
+import { FlatList, Pressable, RefreshControl, View } from 'react-native';
+import { Button, Empty, styles, Text } from '../../components/ui';
 import { listTeam } from '../../lib/api';
 import { useAuth, useRole } from '../../lib/auth';
 import { can, ROLE_LABEL } from '../../lib/roles';
-import { colors } from '../../lib/theme';
+import { colors, fs } from '../../lib/theme';
 import { timeAgo } from '../../lib/time';
 import type { TeamMember } from '../../lib/types';
 
@@ -92,7 +92,7 @@ export default function TeamScreen() {
                 {item.is_active ? '' : ' · disabled'}
               </Text>
               {plan.locked_members.includes(item.id) && (
-                <Text style={{ color: colors.warn, fontWeight: '700', fontSize: 12 }}>
+                <Text style={{ color: colors.warn, fontWeight: '700', fontSize: fs(12) }}>
                   🔒 LOCKED: view only until Pro is renewed
                 </Text>
               )}

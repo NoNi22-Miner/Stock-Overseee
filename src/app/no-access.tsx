@@ -1,8 +1,8 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, styles } from '../components/ui';
+import { Button, styles, Text } from '../components/ui';
 import { useAuth } from '../lib/auth';
-import { colors } from '../lib/theme';
+import { colors, fs } from '../lib/theme';
 
 /** Signed in, but the account has no role yet or was deactivated. */
 export default function NoAccess() {
@@ -12,10 +12,10 @@ export default function NoAccess() {
   return (
     <SafeAreaView style={[styles.screen, { justifyContent: 'center' }]}>
       <View style={[styles.pad, { gap: 16 }]}>
-        <Text style={{ fontSize: 22, fontWeight: '800', color: colors.text }}>
+        <Text style={{ fontSize: fs(22), fontWeight: '800', color: colors.text }}>
           {disabled ? 'Account disabled' : 'No access yet'}
         </Text>
-        <Text style={{ color: colors.text, fontSize: 16 }}>
+        <Text style={{ color: colors.text, fontSize: fs(16) }}>
           {profileError
             ? `Could not load your account: ${profileError}`
             : disabled

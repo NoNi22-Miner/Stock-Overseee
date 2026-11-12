@@ -120,6 +120,13 @@ Set by the **Team Leader** in More → Theme & layout; everyone in the team gets
 - **Home page:** each section can be turned off and moved up or down.
 - Saved in `teams.theme`. Members get a new look the next time they open the app.
 
+### Text & icon size — each person's own (✅)
+
+More → Text & icon size. Small / Normal / Large / Extra large for text, and the same for icons,
+with a preview. Saved on the phone per account (not shared with the team), so young and older
+users can each have a comfortable size, also on a shared phone. The side bar is slimmer by default
+and grows with the chosen sizes.
+
 ## 7d. Plans (✅ codes; Google Play later)
 
 Free (1 location, 1 account per role), Pro Monthly $1, Pro Lifetime $10 (many locations, up to 20

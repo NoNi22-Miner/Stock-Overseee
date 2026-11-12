@@ -1,7 +1,7 @@
 import * as DocumentPicker from 'expo-document-picker';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
-import { Button, Card, Chip, Field, styles } from '../components/ui';
+import { Alert, Image, Pressable, ScrollView, Switch, TextInput, View } from 'react-native';
+import { Button, Card, Chip, Field, styles, Text } from '../components/ui';
 import { getTeamBrand, saveTeamBrand } from '../lib/api';
 import { useRole } from '../lib/auth';
 import { useBrand } from '../lib/brand';
@@ -12,6 +12,7 @@ import {
   contrast,
   DEFAULT_COLOR,
   defaultHome,
+  fs,
   HOME_SECTIONS,
   homeSections,
   paletteFor,
@@ -327,7 +328,7 @@ export default function BrandingScreen() {
             />
             <Text style={{ flex: 1, color: s.on ? colors.text : colors.muted }}>{sectionLabel(s.key)}</Text>
             <Pressable onPress={() => moveSection(i, -1)} hitSlop={8} disabled={i === 0} accessibilityLabel="Move up">
-              <Text style={{ fontSize: 20, color: i === 0 ? colors.border : colors.primary, paddingHorizontal: 6 }}>
+              <Text style={{ fontSize: fs(20), color: i === 0 ? colors.border : colors.primary, paddingHorizontal: 6 }}>
                 ↑
               </Text>
             </Pressable>
@@ -339,7 +340,7 @@ export default function BrandingScreen() {
             >
               <Text
                 style={{
-                  fontSize: 20,
+                  fontSize: fs(20),
                   color: i === home.length - 1 ? colors.border : colors.primary,
                   paddingHorizontal: 6,
                 }}
@@ -444,7 +445,7 @@ function Preview({
             <Image source={{ uri: logo }} style={{ width: 44, height: 26 }} resizeMode="contain" />
           </View>
         )}
-        <Text style={{ color: p.text, fontWeight: '800', fontSize: 16 }} numberOfLines={1}>
+        <Text style={{ color: p.text, fontWeight: '800', fontSize: fs(16) }} numberOfLines={1}>
           {name || 'Company name'}
         </Text>
       </View>
@@ -465,7 +466,7 @@ function Preview({
             {[1, 0.7, 0.45].map((w) => (
               <View key={w} style={{ height: 8, width: `${w * 100}%`, borderRadius: 4, backgroundColor: p.primary }} />
             ))}
-            <Text style={{ color: p.muted, fontSize: 12 }}>{"PLAT BESI · SS400 · 10mm × 4' × 8'"}</Text>
+            <Text style={{ color: p.muted, fontSize: fs(12) }}>{"PLAT BESI · SS400 · 10mm × 4' × 8'"}</Text>
           </View>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <View style={{ backgroundColor: p.primary, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 }}>

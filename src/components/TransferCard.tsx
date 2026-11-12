@@ -1,9 +1,9 @@
 import { router } from 'expo-router';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { formatQty } from '../lib/api';
-import { colors, themed } from '../lib/theme';
+import { colors, fs, themed } from '../lib/theme';
 import type { Transfer } from '../lib/types';
-import { styles } from './ui';
+import { styles, Text } from './ui';
 
 export const STATUS_LABEL = { in_transit: 'In transit', short: 'Short', done: 'Done' } as const;
 const STATUS_COLOR = themed(() => ({ in_transit: colors.primary, short: colors.warn, done: colors.in }));
@@ -38,7 +38,7 @@ export function TransferCard({ t }: { t: Transfer }) {
         <View
           style={{ borderRadius: 999, borderWidth: 1.5, borderColor: color, paddingHorizontal: 10, paddingVertical: 2 }}
         >
-          <Text style={{ color: colors.text, fontWeight: '700', fontSize: 12 }}>{STATUS_LABEL[t.status]}</Text>
+          <Text style={{ color: colors.text, fontWeight: '700', fontSize: fs(12) }}>{STATUS_LABEL[t.status]}</Text>
         </View>
       </View>
       <Text style={{ color: colors.text, fontWeight: '600' }}>

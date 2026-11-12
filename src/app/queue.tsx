@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Alert, ScrollView, Text, TextInput, View } from 'react-native';
-import { Button, Card, Empty, styles } from '../components/ui';
+import { Alert, ScrollView, TextInput, View } from 'react-native';
+import { Button, Card, Empty, styles, Text } from '../components/ui';
 import { formatQty } from '../lib/api';
 import { discardScan, retryScan, syncQueue, useOnline, useQueue, type QueuedScan } from '../lib/offline';
 import { colors, kindColor } from '../lib/theme';

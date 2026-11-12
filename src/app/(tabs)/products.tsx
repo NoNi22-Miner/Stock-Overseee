@@ -1,11 +1,11 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
-import { Button, Chip, Empty, styles } from '../../components/ui';
+import { FlatList, Pressable, RefreshControl, ScrollView, TextInput, View } from 'react-native';
+import { Button, Chip, Empty, styles, Text } from '../../components/ui';
 import { formatQty, listCategories, listProducts } from '../../lib/api';
 import { useRole } from '../../lib/auth';
 import { can } from '../../lib/roles';
-import { colors } from '../../lib/theme';
+import { colors, fs } from '../../lib/theme';
 import type { Category, Product } from '../../lib/types';
 
 /** Category filter value: a category id, 'none' for uncategorized, or null for all. */
@@ -106,7 +106,7 @@ export default function ProductsScreen() {
               {item.is_active ? '' : ' · inactive'}
             </Text>
             {!item.structured && (
-              <Text style={{ color: colors.warn, fontSize: 12, fontWeight: '700' }}>NOT STRUCTURED</Text>
+              <Text style={{ color: colors.warn, fontSize: fs(12), fontWeight: '700' }}>NOT STRUCTURED</Text>
             )}
           </Pressable>
         )}

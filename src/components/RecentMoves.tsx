@@ -1,11 +1,11 @@
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { formatQty } from '../lib/api';
 import type { QueuedScan } from '../lib/offline';
-import { colors, kindColor, themed } from '../lib/theme';
+import { colors, fs, kindColor, themed } from '../lib/theme';
 import { timeAgo } from '../lib/time';
 import type { MovementRow } from '../lib/types';
 import { describeMove } from './HistoryList';
-import { Chip, styles } from './ui';
+import { Chip, styles, Text } from './ui';
 
 export type RecentFilter = 'all' | 'mine';
 
@@ -62,7 +62,7 @@ export function RecentMoves({
       {queued.map((q) => (
         <View key={q.client_id} style={[styles.card, rowStyle, { borderLeftColor: colors.muted, opacity: 0.8 }]}>
           <View style={{ flex: 1, gap: 2 }}>
-            <Text style={{ color: kindColor[q.kind], fontWeight: '800', fontSize: 12 }}>{queuedLabel(q)}</Text>
+            <Text style={{ color: kindColor[q.kind], fontWeight: '800', fontSize: fs(12) }}>{queuedLabel(q)}</Text>
             <Text style={styles.title} numberOfLines={1}>
               {q.product_name}
             </Text>
@@ -98,7 +98,7 @@ export function RecentMoves({
             ]}
           >
             <View style={{ flex: 1, gap: 2 }}>
-              <Text style={{ color: kindColor[m.kind], fontWeight: '800', fontSize: 12 }}>{describeMove(m)}</Text>
+              <Text style={{ color: kindColor[m.kind], fontWeight: '800', fontSize: fs(12) }}>{describeMove(m)}</Text>
               <Text style={styles.title} numberOfLines={1}>
                 {m.product_name}
               </Text>
@@ -120,7 +120,7 @@ export function RecentMoves({
                 accessibilityLabel={`Repeat: ${describeMove(m)} ${formatQty(m.qty)} ${m.unit} ${m.product_name}`}
                 style={({ pressed }) => [repeatBtn, pressed && { opacity: 0.6 }]}
               >
-                <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 18 }}>↻</Text>
+                <Text style={{ color: colors.primary, fontWeight: '800', fontSize: fs(18) }}>↻</Text>
               </Pressable>
             )}
           </Pressable>
@@ -131,7 +131,7 @@ export function RecentMoves({
 }
 
 const rowStyle = { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, borderLeftWidth: 5 };
-const qtyStyle = themed(() => ({ color: colors.text, fontWeight: '800' as const, fontSize: 16 }));
+const qtyStyle = themed(() => ({ color: colors.text, fontWeight: '800' as const, fontSize: fs(16) }));
 const repeatBtn = themed(() => ({
   width: 40,
   height: 40,

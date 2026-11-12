@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import { sizeNumbers, type Dictionary } from '../lib/recognize';
 import { colors } from '../lib/theme';
 import type { Product } from '../lib/types';
-import { Chip, styles } from './ui';
+import { Chip, styles, Text } from './ui';
 
 type Facet = 'grade' | 'label' | 'size' | 'brand';
 const FACETS: { key: Facet; label: string }[] = [

@@ -1,15 +1,31 @@
-import type { ReactNode } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Pressable,
   StyleSheet,
-  Text,
+  Text as RNText,
   TextInput,
   View,
   type TextInputProps,
   type ViewStyle,
+  type TextProps,
 } from 'react-native';
-import { colors, layout, themed } from '../lib/theme';
+import { colors, fs, layout, themed } from '../lib/theme';
+
+const InsideText = createContext(false);
+
+/**
+ * Text at the person's chosen size (More → Text & icon size). Text without a size of its own gets
+ * the normal size, scaled; text inside other text keeps following its parent.
+ */
+export function Text({ style, children, ...props }: TextProps) {
+  const inside = useContext(InsideText);
+  return (
+    <RNText {...props} style={inside ? style : [base.text, style]}>
+      <InsideText.Provider value>{children}</InsideText.Provider>
+    </RNText>
+  );
+}
 
 export function Button({
   title,
@@ -93,6 +109,8 @@ export function Empty({ text }: { text: string }) {
   return <Text style={styles.empty}>{text}</Text>;
 }
 
+const base = themed(() => ({ text: { fontSize: fs(14) } }));
+
 export const styles = themed(() =>
   StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.bg },
@@ -105,8 +123,8 @@ export const styles = themed(() =>
       justifyContent: 'center',
       paddingHorizontal: 16,
     },
-    buttonText: { fontSize: layout.space.font, fontWeight: '600' },
-    label: { fontSize: 13, color: colors.muted, fontWeight: '600' },
+    buttonText: { fontSize: fs(layout.space.font), fontWeight: '600' },
+    label: { fontSize: fs(13), color: colors.muted, fontWeight: '600' },
     input: {
       backgroundColor: colors.card,
       borderWidth: 1,
@@ -114,7 +132,7 @@ export const styles = themed(() =>
       borderRadius: 10,
       paddingHorizontal: 12,
       paddingVertical: layout.space.inputPad,
-      fontSize: layout.space.font,
+      fontSize: fs(layout.space.font),
       color: colors.text,
     },
     card: {
@@ -134,7 +152,7 @@ export const styles = themed(() =>
       paddingHorizontal: 14,
       paddingVertical: layout.space.chipPad,
     },
-    chipText: { fontWeight: '600', fontSize: 14 },
+    chipText: { fontWeight: '600', fontSize: fs(14) },
     chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     badge: {
       backgroundColor: colors.warn,
@@ -143,10 +161,10 @@ export const styles = themed(() =>
       paddingHorizontal: 5,
       alignItems: 'center',
     },
-    badgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+    badgeText: { color: '#fff', fontSize: fs(12), fontWeight: '700' },
     empty: { textAlign: 'center', color: colors.muted, padding: 32 },
-    title: { fontSize: layout.space.font + 1, fontWeight: '700', color: colors.text },
-    muted: { color: colors.muted, fontSize: 13 },
+    title: { fontSize: fs(layout.space.font + 1), fontWeight: '700', color: colors.text },
+    muted: { color: colors.muted, fontSize: fs(13) },
     row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   }),
 );
