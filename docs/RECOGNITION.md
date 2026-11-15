@@ -98,6 +98,32 @@ not read the whole page or the quantity.
    scan at all you can also tap your way to any item: Category → Grade → Label → Size → Brand.
 8. **Typing** a name in the scan box uses the same matching.
 
+## 3b. Grade per move (15 Nov 2026)
+
+One item, its stock kept per grade.
+
+- **Scan:** after the item is found, a **Grade** row shows the grades from the Recognition Table
+  (A, B, C …, and **No grade** if the item has a version without one). The item's own grade is picked
+  already; tap another to move that grade.
+- **Stock per grade** under the item, per location: `WRH: None 4 · A 20 · B 3 = 27`, the picked grade
+  in bold.
+- **New grade:** if the item has no version with that grade yet, the app says so and makes it when you
+  save: same parts and unit, the grade in the name (`PLAT BESI B · SS400 · …`), its own code (IT…),
+  min stock 0. This works offline too (it is made when the scan is sent). Out / Transfer of a grade
+  with no stock is refused as usual, and then nothing is made.
+- **Label with a grade:** when the camera reads a grade (e.g. `STD (A)` or a lone `B`), that grade is
+  picked. If you pick another item from the list, a note says what the label said.
+- **Matching:** versions of one item count as one match, so "Which item is it?" does not ask between
+  A and B; you pick the grade on the card.
+- **Stock tab:** all grades of an item on one card: `None 4 · A 20 · B 3`, total on the right; a grade
+  under its min stock is marked.
+- **Item page:** **Grades of this item** with each version's code; tap one to open it. Saving a change
+  to the parts or unit of one grade changes its other grades the same way (each keeps its grade and
+  code).
+- Database: `record_graded_movement` (In / Out / Transfer, sent once per scan id like
+  `record_movement_sync`) and `record_graded_adjustment` (stock count) find or make the version with
+  `private.grade_version`. Items not split into parts have no grades.
+
 ## 4. Later (not in this version)
 
 - **DO file import** from your DO system (Excel / PDF), using the warehouse column via location aliases.

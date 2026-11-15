@@ -7,6 +7,7 @@ import { PartChips, type ChipOption } from '../../components/PartChips';
 import { Button, Card, Chip, Field, styles, Text } from '../../components/ui';
 import { formatQty, getProduct, listHistory, listProducts, saveProduct, stockForProduct } from '../../lib/api';
 import { useRole } from '../../lib/auth';
+import { gradeName, gradeVersions } from '../../lib/grades';
 import { cached } from '../../lib/offline';
 import { useRecognition } from '../../lib/recognition';
 import { buildName, finishSize, fitToPattern, patternText, splitName, UNITS } from '../../lib/recognize';
@@ -44,6 +45,8 @@ export default function ProductScreen() {
   const [history, setHistory] = useState<MovementRow[]>([]);
   const [camera, setCamera] = useState(false);
   const [saving, setSaving] = useState(false);
+  /** The item as it was loaded (to see which parts changed). */
+  const [loaded, setLoaded] = useState<Product | null>(null);
 
   // Lists may have changed in the Recognition Table.
   useFocusEffect(
@@ -83,6 +86,7 @@ export default function ProductScreen() {
     if (isNew) return;
     Promise.all([getProduct(params.id), stockForProduct(params.id), listHistory({ productId: params.id, limit: 30 })])
       .then(([p, s, h]) => {
+        setLoaded(p);
         setBarcode(p.barcode);
         setPlainName(p.name);
         setStructured(p.structured);
@@ -162,6 +166,27 @@ export default function ProductScreen() {
     structured &&
     products.some((p) => p.structured && p.id !== params.id && p.name.toUpperCase() === preview.toUpperCase());
 
+  // The other grade versions of this item (same parts, another grade).
+  const versions = useMemo(
+    () => (loaded?.structured ? gradeVersions(products, loaded, dict) : []),
+    [loaded, products, dict],
+  );
+  const siblings = versions.filter((v) => v.id !== loaded?.id);
+  const sameList = (a: string[] = [], b: string[] = []) => a.length === b.length && a.every((x, i) => x === b[i]);
+  const partsChanged =
+    !!loaded &&
+    structured &&
+    (loaded.category_id !== categoryId ||
+      loaded.brand_id !== brandId ||
+      loaded.unit !== unit ||
+      !sameList(loaded.label_ids, labelIds) ||
+      !sameList(loaded.mark_ids, markIds) ||
+      !sameList(
+        loaded.size?.map((x) => x.toUpperCase()),
+        size.map((x) => x.toUpperCase()),
+      ));
+  const followers = partsChanged ? siblings : [];
+
   const minNum = Number(minStock.replace(',', '.'));
   let problem: string | null = null;
   if (structured && !categoryId) problem = 'Pick a category';
@@ -188,6 +213,25 @@ export default function ProductScreen() {
         mark_ids: markIds,
         size,
       });
+      // The other grades of this item get the same parts and unit (each keeps its grade and code).
+      const failed: string[] = [];
+      for (const v of followers) {
+        try {
+          await saveProduct(v.id, {
+            ...v,
+            unit,
+            category_id: categoryId,
+            structured: true,
+            brand_id: brandId,
+            label_ids: labelIds,
+            mark_ids: markIds,
+            size,
+          });
+        } catch (e) {
+          failed.push(`${v.name}: ${(e as Error).message}`);
+        }
+      }
+      if (failed.length) Alert.alert('Saved, but some grades were not changed', failed.join('\n'));
       router.back();
     } catch (e) {
       Alert.alert('Could not save', (e as Error).message);
@@ -223,6 +267,25 @@ export default function ProductScreen() {
               </Text>
             ))}
           </View>
+        </Card>
+      )}
+
+      {siblings.length > 0 && (
+        <Card style={{ gap: 6 }}>
+          <Text style={styles.label}>Grades of this item</Text>
+          <View style={styles.chipRow}>
+            {versions.map((v) => (
+              <Chip
+                key={v.id}
+                label={`${gradeName(v.grade_id, dict)} · ${v.barcode}${v.is_active ? '' : ' (inactive)'}`}
+                active={v.id === loaded?.id}
+                onPress={() => v.id !== loaded?.id && router.replace(`/product/${v.id}`)}
+              />
+            ))}
+          </View>
+          <Text style={styles.muted}>
+            Each grade has its own code and stock. Another grade is made by itself when a move picks it on Scan.
+          </Text>
         </Card>
       )}
 
@@ -426,6 +489,12 @@ export default function ProductScreen() {
       {editable && (
         <>
           {problem && <Text style={{ color: colors.out }}>{problem}</Text>}
+          {followers.length > 0 && (
+            <Text style={styles.muted}>
+              The other grades of this item get the same changes:{' '}
+              {followers.map((v) => gradeName(v.grade_id, dict)).join(', ')}
+            </Text>
+          )}
           <Button title={isNew ? 'Create item' : 'Save changes'} onPress={save} loading={saving} disabled={!!problem} />
         </>
       )}

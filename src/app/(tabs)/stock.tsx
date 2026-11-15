@@ -1,15 +1,30 @@
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, TextInput, View } from 'react-native';
 import { LocationPicker } from '../../components/LocationPicker';
 import { Chip, Empty, styles, Text } from '../../components/ui';
-import { formatQty, listLocations, lowStockCounts, stockAtLocation } from '../../lib/api';
+import { formatQty, listLocations, listProducts, lowStockCounts, stockAtLocation } from '../../lib/api';
 import { useLocationAccess } from '../../lib/auth';
+import { familyKey, familyName, gradeOrder, gradeShort } from '../../lib/grades';
+import { cached } from '../../lib/offline';
+import { useRecognition } from '../../lib/recognition';
 import { colors, fs } from '../../lib/theme';
-import type { Location, StockRow } from '../../lib/types';
+import type { Location, Product, StockRow } from '../../lib/types';
+
+/** One item with all its grade versions at this location. */
+type Group = {
+  key: string;
+  name: string;
+  unit: string;
+  qty: number;
+  low: boolean;
+  versions: { row: StockRow; grade: string | null }[];
+};
 
 export default function StockScreen() {
   const canUse = useLocationAccess();
+  const { dict } = useRecognition();
+  const [products, setProducts] = useState<Product[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [locationId, setLocationId] = useState<string | null>(null);
   const [rows, setRows] = useState<StockRow[]>([]);
@@ -27,12 +42,14 @@ export default function StockScreen() {
       setLocations(locs);
       const current = locs.find((l) => l.id === locationId)?.id ?? locs[0]?.id ?? null;
       setLocationId(current);
-      const [stock, low] = await Promise.all([
+      const [stock, low, prods] = await Promise.all([
         current ? stockAtLocation(current) : Promise.resolve([]),
         lowStockCounts(),
+        cached('products', listProducts).catch(() => null),
       ]);
       setRows(stock);
       setLowCounts(low);
+      if (prods) setProducts(prods.value);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -46,10 +63,42 @@ export default function StockScreen() {
     }, [load]),
   );
 
-  const q = search.trim().toLowerCase();
-  const shown = rows.filter(
-    (r) =>
-      (!lowOnly || r.is_low) && (!q || r.product_name.toLowerCase().includes(q) || r.barcode.toLowerCase().includes(q)),
+  // Grade versions of an item are shown together: "A 20 · B 3 · C 1 = 24".
+  const groups = useMemo(() => {
+    const byId = new Map(products.map((p) => [p.id, p]));
+    const map = new Map<string, Group>();
+    for (const row of rows) {
+      const p = byId.get(row.product_id);
+      const key = p ? familyKey(p) : `id:${row.product_id}`;
+      let g = map.get(key);
+      if (!g) {
+        g = { key, name: p ? familyName(p, dict) : row.product_name, unit: row.unit, qty: 0, low: false, versions: [] };
+        map.set(key, g);
+      }
+      g.versions.push({ row, grade: p?.grade_id ?? null });
+      g.qty += row.qty;
+      g.low ||= row.is_low;
+    }
+    const list = [...map.values()];
+    for (const g of list) {
+      g.versions.sort((a, b) => gradeOrder(a.grade, dict) - gradeOrder(b.grade, dict));
+      if (g.versions.length === 1) g.name = g.versions[0].row.product_name;
+    }
+    return list.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  }, [rows, products, dict]);
+
+  // Every word typed must be in the name or code, in any order.
+  const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const shown = groups.filter(
+    (g) =>
+      (!lowOnly || g.low) &&
+      words.every(
+        (w) =>
+          g.name.toLowerCase().includes(w) ||
+          g.versions.some(
+            (v) => v.row.product_name.toLowerCase().includes(w) || v.row.barcode.toLowerCase().includes(w),
+          ),
+      ),
   );
   const lowHere = locationId ? (lowCounts[locationId] ?? 0) : 0;
 
@@ -72,13 +121,15 @@ export default function StockScreen() {
             onPress={() => setLowOnly((v) => !v)}
             color={colors.warn}
           />
-          <Text style={styles.muted}>{shown.length} items</Text>
+          <Text style={styles.muted}>
+            {shown.length} item{shown.length === 1 ? '' : 's'}
+          </Text>
         </View>
         {error && <Text style={{ color: colors.out }}>{error}</Text>}
       </View>
       <FlatList
         data={shown}
-        keyExtractor={(r) => r.product_id}
+        keyExtractor={(g) => g.key}
         contentContainerStyle={{ padding: 16, paddingTop: 8, gap: 8 }}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
         ListEmptyComponent={
@@ -86,30 +137,85 @@ export default function StockScreen() {
             <Empty text={lowOnly ? 'No low-stock items here.' : 'No products yet. Add one in Products.'} />
           )
         }
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() => router.push(`/product/${item.product_id}`)}
-            style={[
-              styles.card,
-              { flexDirection: 'row', alignItems: 'center' },
-              item.is_low && { borderColor: colors.warn, backgroundColor: colors.warnBg },
-            ]}
-          >
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={styles.title}>{item.product_name}</Text>
-              <Text style={styles.muted}>
-                {item.barcode}
-                {item.min_stock > 0 ? `  ·  min ${formatQty(item.min_stock)}` : ''}
+        renderItem={({ item }) =>
+          item.versions.length === 1 ? (
+            <OneItem row={item.versions[0].row} />
+          ) : (
+            <Pressable
+              onPress={() => {
+                // Open the version with the most stock here.
+                const top = [...item.versions].sort((a, b) => b.row.qty - a.row.qty)[0];
+                router.push(`/product/${top.row.product_id}`);
+              }}
+              style={[
+                styles.card,
+                { flexDirection: 'row', alignItems: 'center' },
+                item.low && { borderColor: colors.warn, backgroundColor: colors.warnBg },
+              ]}
+            >
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={styles.title}>{item.name}</Text>
+                <View style={[styles.row, { flexWrap: 'wrap', gap: 6 }]}>
+                  {item.versions.map(({ row, grade }) => (
+                    <View
+                      key={row.product_id}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'baseline',
+                        gap: 4,
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: row.is_low ? colors.warn : colors.border,
+                      }}
+                    >
+                      <Text style={{ color: colors.muted, fontWeight: '700', fontSize: fs(12) }}>
+                        {gradeShort(grade, dict)}
+                      </Text>
+                      <Text style={{ color: row.is_low ? colors.warn : colors.text, fontWeight: '800' }}>
+                        {formatQty(row.qty)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+                {item.low && <Text style={{ color: colors.warn, fontWeight: '700' }}>Low stock</Text>}
+              </View>
+              <Text style={{ fontSize: fs(22), fontWeight: '800', color: item.low ? colors.warn : colors.text }}>
+                {formatQty(item.qty)}
+                <Text style={styles.muted}> {item.unit}</Text>
               </Text>
-              {item.is_low && <Text style={{ color: colors.warn, fontWeight: '700' }}>Low stock</Text>}
-            </View>
-            <Text style={{ fontSize: fs(22), fontWeight: '800', color: item.is_low ? colors.warn : colors.text }}>
-              {formatQty(item.qty)}
-              <Text style={styles.muted}> {item.unit}</Text>
-            </Text>
-          </Pressable>
-        )}
+            </Pressable>
+          )
+        }
       />
     </View>
+  );
+}
+
+/** An item with one version: as before (name, code, min stock). */
+function OneItem({ row }: { row: StockRow }) {
+  return (
+    <Pressable
+      onPress={() => router.push(`/product/${row.product_id}`)}
+      style={[
+        styles.card,
+        { flexDirection: 'row', alignItems: 'center' },
+        row.is_low && { borderColor: colors.warn, backgroundColor: colors.warnBg },
+      ]}
+    >
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={styles.title}>{row.product_name}</Text>
+        <Text style={styles.muted}>
+          {row.barcode}
+          {row.min_stock > 0 ? `  ·  min ${formatQty(row.min_stock)}` : ''}
+        </Text>
+        {row.is_low && <Text style={{ color: colors.warn, fontWeight: '700' }}>Low stock</Text>}
+      </View>
+      <Text style={{ fontSize: fs(22), fontWeight: '800', color: row.is_low ? colors.warn : colors.text }}>
+        {formatQty(row.qty)}
+        <Text style={styles.muted}> {row.unit}</Text>
+      </Text>
+    </Pressable>
   );
 }

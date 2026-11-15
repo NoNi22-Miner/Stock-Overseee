@@ -47,6 +47,7 @@ Every business is a separate **team**; teams never see each other's data.
 | ✅ Products | Barcode (unique per team), name, unit, minimum stock (low-stock warning). |
 | ✅ Categories | Each product has one category (e.g. Steel Shaft, Steel Pipe, Steel Knee), or "Uncategorized". Team Leader / Oversee manage the list in **Products → Categories**; deleting a category makes its products Uncategorized. |
 | ✅ Movements | **In**, **Out**, **Transfer**, **Adjust** (set the counted quantity). Stock can never go below 0. Every movement records who, when and an optional note. |
+| ✅ Grades | **Grade per move:** on Scan, tap the grade (A / B / C …) before the quantity. Stock is kept per grade, e.g. WRH: None 4 · A 20 · B 3 = 27. The B or C version of an item is made by itself the first time it is used (own code IT…, min stock 0); Staff can do this too. The **Stock** tab shows an item's grades together on one card. Changing the parts of one grade (size, brand …) changes its other grades too. Details: `docs/RECOGNITION.md` §3b. |
 | ✅ Transfers | **Send → in transit → receive.** Stock leaves the source when sent; the destination confirms what arrived: **all**, or **fewer** (the transfer becomes **Short**). Missing items stay open until the sender or a Team Leader / Oversee marks them **returned to source**, **arrived late** or **lost**. Shown in the **Transfers** tab (To receive / Short / On the way / Done). |
 
 ## 5. Home dashboard

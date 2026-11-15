@@ -170,7 +170,20 @@ export async function recordAdjustment(input: {
   locationId: string;
   newQty: number;
   note?: string;
+  /** Count the version of the item with this grade (made if it does not exist yet). */
+  grade?: { id: string | null };
 }) {
+  if (input.grade) {
+    const { error } = await supabase.rpc('record_graded_adjustment', {
+      p_product_id: input.productId,
+      p_grade_id: input.grade.id,
+      p_location_id: input.locationId,
+      p_new_qty: input.newQty,
+      p_note: input.note ?? null,
+    });
+    if (error) throw new Error(error.message);
+    return;
+  }
   const { error } = await supabase.rpc('record_adjustment', {
     p_product_id: input.productId,
     p_location_id: input.locationId,

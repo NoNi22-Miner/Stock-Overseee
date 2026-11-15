@@ -19,7 +19,8 @@ import { describeMove } from '../../components/HistoryList';
 import { Button, Card, Chip, Field, styles, Text } from '../../components/ui';
 import { formatQty, listHistory, listLocations, listMyStock, listProducts, recordAdjustment } from '../../lib/api';
 import { useAuth, useMoveAccess, useRole } from '../../lib/auth';
-import { cached, submitScan, useOnline, useQueue } from '../../lib/offline';
+import { familyKey, gradeList, gradeName, gradeShort, gradeVersions, versionName } from '../../lib/grades';
+import { cached, submitScan, useOnline, useQueue, type QueuedScan } from '../../lib/offline';
 import { useRecognition } from '../../lib/recognition';
 import { allowsDecimals, isSure, rankItems, splitName, type ItemMatch } from '../../lib/recognize';
 import { can } from '../../lib/roles';
@@ -67,6 +68,10 @@ export default function ScanScreen() {
   const [picker, setPicker] = useState(false);
   const recognition = useRecognition();
   const [product, setProduct] = useState<Product | null>(null);
+  /** The grade to move: the item's own grade, or another (its version with that grade is used / made). */
+  const [gradeId, setGradeId] = useState<string | null>(null);
+  /** The grade written on the label that was read, if any. */
+  const [readGrade, setReadGrade] = useState<string | null>(null);
   const [qty, setQty] = useState('1');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -131,38 +136,69 @@ export default function ScanScreen() {
     }, []),
   );
 
-  // Stock for the chosen product, including scans still waiting to sync on this phone.
-  const pendingDelta = useCallback(
-    (productId: string, locationId: string | null) =>
-      queue
-        .filter((q) => q.status === 'pending' && q.product_id === productId)
+  const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+  const grades = useMemo(() => gradeList(recognition.data.terms), [recognition.data.terms]);
+
+  /** The version of item p with this grade on this phone (active), or null if it is not made yet. */
+  const findVersion = useCallback(
+    (p: Product, grade: string | null): Product | null => {
+      if (p.grade_id === grade) return p;
+      if (!p.structured) return null;
+      const key = familyKey(p);
+      return products.find((x) => x.is_active && x.grade_id === grade && x.structured && familyKey(x) === key) ?? null;
+    },
+    [products],
+  );
+
+  /** Does a scan waiting on this phone go to this version (id, or not made yet: item key + grade)? */
+  const queuedTo = useCallback(
+    (q: QueuedScan, id: string | null, key: string, grade: string | null) => {
+      if (!q.pick_grade) return id != null && q.product_id === id;
+      const base = productById.get(q.product_id);
+      return !!base && familyKey(base) === key && (q.grade_id ?? null) === grade;
+    },
+    [productById],
+  );
+
+  /** Stock of item p in this grade at a location, including scans still waiting to sync on this phone. */
+  const versionStock = useCallback(
+    (p: Product, grade: string | null, locationId: string | null) => {
+      if (!locationId) return 0;
+      const v = findVersion(p, grade);
+      const key = familyKey(p);
+      const saved = v ? (stockRows.find((s) => s.product_id === v.id && s.location_id === locationId)?.qty ?? 0) : 0;
+      const waiting = queue
+        .filter((q) => q.status === 'pending' && queuedTo(q, v?.id ?? null, key, grade))
         .reduce(
           (n, q) =>
             n + (q.to_id === locationId && q.kind === 'IN' ? q.qty : 0) - (q.from_id === locationId ? q.qty : 0),
           0,
-        ),
-    [queue],
+        );
+      return saved + waiting;
+    },
+    [findVersion, stockRows, queue, queuedTo],
   );
   const stockAt = useCallback(
-    (locationId: string | null) => {
-      if (!product || !locationId) return 0;
-      const row = stockRows.find((s) => s.product_id === product.id && s.location_id === locationId);
-      return (row?.qty ?? 0) + pendingDelta(product.id, locationId);
-    },
-    [product, stockRows, pendingDelta],
+    (locationId: string | null) => (product ? versionStock(product, gradeId, locationId) : 0),
+    [product, gradeId, versionStock],
   );
 
-  function choose(p: Product, learnIt = false) {
+  /** Use this item; `grade` (e.g. read from the label) picks another grade of it. */
+  function choose(p: Product, learnIt = false, grade?: string | null) {
     if (learnIt && pickFor) recognition.learn(pickFor, p.id);
+    const g = grade !== undefined && p.structured ? grade : p.grade_id;
     setPickFor(null);
     setPicker(false);
     setProduct(p);
+    setGradeId(g);
     unknownCode.current = null;
-    setQty(mode === 'ADJUST' ? formatQty(stockAtFor(p, fromId)) : '1');
+    setQty(mode === 'ADJUST' ? formatQty(versionStock(p, g, fromId)) : '1');
   }
-  const stockAtFor = (p: Product, locationId: string | null) =>
-    (stockRows.find((s) => s.product_id === p.id && s.location_id === locationId)?.qty ?? 0) +
-    pendingDelta(p.id, locationId);
+
+  function chooseGrade(g: string | null) {
+    setGradeId(g);
+    if (product && mode === 'ADJUST') setQty(formatQty(versionStock(product, g, fromId)));
+  }
 
   /** Exact barcode / code first; then items whose parts match (or learned spellings). */
   function findText(blocks: string[], list: Product[] = products) {
@@ -172,12 +208,18 @@ export default function ScanScreen() {
     setLookedUp(text);
     setPicker(false);
     const exact = list.find((p) => p.barcode.trim().toLowerCase() === text.toLowerCase());
+    // Grade versions of one item count as one match (the best-fitting version); the grade is picked after.
+    const seen = new Set<string>();
     const found = exact
       ? [{ product: exact, score: 1 }]
-      : rankItems(blocks, list, recognition.dict, recognition.learned, 6);
+      : rankItems(blocks, list, recognition.dict, recognition.learned, 12)
+          .filter((m) => !seen.has(familyKey(m.product)) && !!seen.add(familyKey(m.product)))
+          .slice(0, 6);
+    const grade = exact ? null : splitName(text, recognition.dict, true).gradeId;
+    setReadGrade(grade);
     setMatches(found);
     if (exact || isSure(found)) {
-      choose(found[0].product);
+      choose(found[0].product, false, grade ?? undefined);
     } else {
       setProduct(null);
       setPickFor(text);
@@ -194,6 +236,8 @@ export default function ScanScreen() {
     setReadText(null);
     setMatches([]);
     setProduct(null);
+    setGradeId(null);
+    setReadGrade(null);
     setQty('1');
     setNote('');
   }
@@ -219,6 +263,26 @@ export default function ScanScreen() {
     setFromId(id);
     if (isAdjust) setQty(formatQty(stockAt(id)));
   }
+
+  // The version that is moved: the item itself, another grade of it, or one not made yet (null).
+  const target = product ? findVersion(product, gradeId) : null;
+  const targetName = product ? (target?.name ?? versionName(product, gradeId, recognition.dict)) : '';
+  const versions = useMemo(
+    () =>
+      product
+        ? gradeVersions(
+            products.filter((p) => p.is_active),
+            product,
+            recognition.dict,
+          )
+        : [],
+    [product, products, recognition.dict],
+  );
+  const showGrades = !!product?.structured && grades.length > 0;
+  const gradeChoices: (string | null)[] = [
+    ...(versions.some((v) => !v.grade_id) ? [null] : []),
+    ...grades.map((g) => g.id),
+  ];
 
   let problem: string | null = null;
   if (!product) problem = 'Scan or pick an item first';
@@ -248,15 +312,24 @@ export default function ScanScreen() {
   async function submit() {
     if (!product || problem) return;
     setBusy(true);
+    const name = targetName;
+    const newVersion = !target;
     try {
       if (mode === 'ADJUST') {
-        await recordAdjustment({ productId: product.id, locationId: fromId!, newQty: qtyNum, note });
-        setMessage({ ok: true, text: `Saved: ${product.name} — ${summary}` });
+        await recordAdjustment({
+          productId: target?.id ?? product.id,
+          locationId: fromId!,
+          newQty: qtyNum,
+          note,
+          grade: newVersion ? { id: gradeId } : undefined,
+        });
+        setMessage({ ok: true, text: `Saved: ${name} — ${summary}` });
       } else {
         const { queued } = await submitScan({
           kind: mode,
-          product_id: product.id,
-          product_name: product.name,
+          product_id: target?.id ?? product.id,
+          product_name: name,
+          ...(newVersion ? { pick_grade: true, grade_id: gradeId } : {}),
           unit: product.unit,
           qty: qtyNum,
           from_id: usesFrom ? fromId : null,
@@ -268,15 +341,21 @@ export default function ScanScreen() {
         setMessage({
           ok: true,
           text: queued
-            ? `Saved on this phone: ${product.name} — ${summary}. It will be sent when you are back online.`
+            ? `Saved on this phone: ${name} — ${summary}. It will be sent when you are back online.`
             : mode === 'TRANSFER'
-              ? `Sent: ${product.name} — ${summary}. Waiting for ${toLoc?.code} to receive it.`
-              : `Saved: ${product.name} — ${summary}`,
+              ? `Sent: ${name} — ${summary}. Waiting for ${toLoc?.code} to receive it.`
+              : `Saved: ${name} — ${summary}`,
         });
       }
       reset();
       loadStock().catch(() => {});
       loadRecent();
+      // A new grade version was made: load it, so it is found next time.
+      if (newVersion) {
+        cached('products', listProducts)
+          .then((r) => setProducts(r.value))
+          .catch(() => {});
+      }
     } catch (e) {
       setMessage({ ok: false, text: (e as Error).message });
     } finally {
@@ -310,6 +389,8 @@ export default function ScanScreen() {
       if (m.from_location_id) setFromId(m.from_location_id);
       if (m.to_location_id) setToId(m.to_location_id);
       setProduct(p);
+      setGradeId(p.grade_id);
+      setReadGrade(null);
       setQty(formatQty(m.qty));
       setMessage(null);
     } else {
@@ -330,11 +411,7 @@ export default function ScanScreen() {
       Alert.alert('Cannot repeat', `${m.product_name} is no longer an active product.`);
       return;
     }
-    const have =
-      m.from_location_id != null
-        ? (stockRows.find((r) => r.product_id === p.id && r.location_id === m.from_location_id)?.qty ?? 0) +
-          pendingDelta(p.id, m.from_location_id)
-        : Infinity;
+    const have = m.from_location_id != null ? versionStock(p, p.grade_id, m.from_location_id) : Infinity;
     if (m.qty > have) {
       Alert.alert('Not enough stock', `Only ${formatQty(have)} ${p.unit} at ${m.from_code}.`);
       return;
@@ -394,7 +471,10 @@ export default function ScanScreen() {
 
   const pendingCount = queue.filter((q) => q.status === 'pending').length;
   const failedCount = queue.filter((q) => q.status === 'failed').length;
-  const otherMatches = useMemo(() => matches.filter((m) => m.product.id !== product?.id), [matches, product]);
+  const otherMatches = useMemo(
+    () => (product ? matches.filter((m) => familyKey(m.product) !== familyKey(product)) : matches),
+    [matches, product],
+  );
   const readCategory = useMemo(
     () => (lookedUp ? splitName(lookedUp, recognition.dict, true).categoryId : null),
     [lookedUp, recognition.dict],
@@ -557,14 +637,65 @@ export default function ScanScreen() {
 
         {product && (
           <Card>
-            <Text style={styles.title}>{product.name}</Text>
-            <Text style={styles.muted}>{product.barcode}</Text>
-            <View style={[styles.chipRow, { marginTop: 4 }]}>
-              {mine.map((l) => (
-                <Text key={l.id} style={{ color: colors.text }}>
-                  {l.code}: <Text style={{ fontWeight: '700' }}>{formatQty(stockAt(l.id))}</Text>
-                </Text>
-              ))}
+            <Text style={styles.title}>{targetName}</Text>
+            <Text style={styles.muted}>{target ? target.barcode : 'New grade version: it gets its own code'}</Text>
+            {showGrades && (
+              <View style={{ gap: 6, marginTop: 4 }}>
+                <Text style={styles.label}>Grade</Text>
+                <View style={styles.chipRow}>
+                  {gradeChoices.map((g) => (
+                    <Chip
+                      key={g ?? 'none'}
+                      label={gradeName(g, recognition.dict)}
+                      active={gradeId === g}
+                      color={kindColor[mode]}
+                      onPress={() => chooseGrade(g)}
+                    />
+                  ))}
+                </View>
+                {readGrade && readGrade !== gradeId && (
+                  <Text style={{ color: colors.warn, fontWeight: '600' }}>
+                    The label says grade {gradeName(readGrade, recognition.dict)}
+                  </Text>
+                )}
+                {!target && (
+                  <Text style={styles.muted}>
+                    {mode === 'IN' || mode === 'ADJUST'
+                      ? `No ${gradeName(gradeId, recognition.dict)} version of this item yet. It is made when you save.`
+                      : `There is no ${gradeName(gradeId, recognition.dict)} stock of this item.`}
+                  </Text>
+                )}
+              </View>
+            )}
+            <View style={{ gap: 2, marginTop: 6 }}>
+              {mine.map((l) => {
+                const shown = showGrades ? versions : [product];
+                const list = shown.map((v) => ({ v, n: versionStock(v, v.grade_id, l.id) }));
+                if (showGrades && !target) list.push({ v: product, n: 0 }); // the version about to be made
+                const many = list.length > 1;
+                return (
+                  <Text key={l.id} style={{ color: colors.text }}>
+                    {l.code}:{' '}
+                    {many
+                      ? list.map(({ v, n }, i) => {
+                          const g = i === shown.length ? gradeId : v.grade_id;
+                          const sel = g === gradeId;
+                          return (
+                            <Text key={g ?? 'none'} style={sel ? { fontWeight: '800', color: kindColor[mode] } : null}>
+                              {i ? '  ·  ' : ''}
+                              {gradeShort(g, recognition.dict)} {formatQty(n)}
+                            </Text>
+                          );
+                        })
+                      : null}
+                    {many ? (
+                      <Text style={styles.muted}> = {formatQty(list.reduce((t, x) => t + x.n, 0))}</Text>
+                    ) : (
+                      <Text style={{ fontWeight: '700' }}>{formatQty(stockAt(l.id))}</Text>
+                    )}
+                  </Text>
+                );
+              })}
             </View>
             {otherMatches.length > 0 && (
               <View style={{ gap: 6, marginTop: 6 }}>
@@ -592,7 +723,10 @@ export default function ScanScreen() {
             <View style={styles.row}>
               <Button title="−" variant="outline" onPress={() => step(-1)} style={{ width: 56 }} />
               <TextInput
-                style={[styles.input, { flex: 1, textAlign: 'center', fontSize: fs(22), fontWeight: '700' }]}
+                style={[
+                  styles.input,
+                  { flex: 1, minWidth: 0, textAlign: 'center', fontSize: fs(22), fontWeight: '700' },
+                ]}
                 keyboardType={allowsDecimals(product.unit) ? 'decimal-pad' : 'number-pad'}
                 value={qty}
                 onChangeText={setQty}

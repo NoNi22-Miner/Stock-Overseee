@@ -102,6 +102,9 @@ export type QueuedScan = {
   from_code: string | null;
   to_code: string | null;
   note: string;
+  /** Use the version of the item with this grade (made if it does not exist yet). */
+  pick_grade?: boolean;
+  grade_id?: string | null;
   scanned_at: string;
   status: 'pending' | 'failed';
   error?: string;
@@ -157,6 +160,21 @@ export function newClientId() {
 }
 
 async function send(s: QueuedScan) {
+  if (s.pick_grade) {
+    const { error } = await supabase.rpc('record_graded_movement', {
+      p_client_id: s.client_id,
+      p_scanned_at: s.scanned_at,
+      p_kind: s.kind,
+      p_product_id: s.product_id,
+      p_grade_id: s.grade_id ?? null,
+      p_qty: s.qty,
+      p_from: s.from_id,
+      p_to: s.to_id,
+      p_note: s.note || null,
+    });
+    if (error) throw new Error(error.message);
+    return;
+  }
   const { error } = await supabase.rpc('record_movement_sync', {
     p_client_id: s.client_id,
     p_scanned_at: s.scanned_at,
