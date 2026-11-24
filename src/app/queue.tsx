@@ -57,10 +57,8 @@ function QueueItem({ q }: { q: QueuedScan }) {
         </Text>
       </View>
       <Text style={styles.title}>{q.product_name}</Text>
-      <Text style={styles.muted}>
-        Scanned {new Date(q.scanned_at).toLocaleString()}
-        {q.note ? `  ·  ${q.note}` : ''}
-      </Text>
+      <Text style={styles.muted}>Scanned {new Date(q.scanned_at).toLocaleString()}</Text>
+      {q.note ? <Text style={{ color: colors.text }}>Note: {q.note}</Text> : null}
       {failed ? (
         <>
           <Text style={{ color: colors.out, fontWeight: '600' }}>Not synced: {q.error}</Text>

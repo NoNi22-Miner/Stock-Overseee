@@ -105,6 +105,7 @@ export default function ProductsScreen() {
               {item.barcode} · {item.unit} · min {formatQty(Number(item.min_stock))}
               {item.is_active ? '' : ' · inactive'}
             </Text>
+            {!!item.grade_note && <Text style={styles.muted}>Remark: {item.grade_note}</Text>}
             {!item.structured && (
               <Text style={{ color: colors.warn, fontSize: fs(12), fontWeight: '700' }}>NOT STRUCTURED</Text>
             )}

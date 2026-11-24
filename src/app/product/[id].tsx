@@ -7,10 +7,10 @@ import { PartChips, type ChipOption } from '../../components/PartChips';
 import { Button, Card, Chip, Field, styles, Text } from '../../components/ui';
 import { formatQty, getProduct, listHistory, listProducts, saveProduct, stockForProduct } from '../../lib/api';
 import { useRole } from '../../lib/auth';
-import { gradeName, gradeVersions } from '../../lib/grades';
+import { defaultGradeTerm, gradeName, gradeVersions, mappedGradeId } from '../../lib/grades';
 import { cached } from '../../lib/offline';
 import { useRecognition } from '../../lib/recognition';
-import { buildName, finishSize, fitToPattern, patternText, splitName, UNITS } from '../../lib/recognize';
+import { buildName, finishSize, fitToPattern, patternText, splitName, UNITS, type Parts } from '../../lib/recognize';
 import { can } from '../../lib/roles';
 import { colors, fs } from '../../lib/theme';
 import type { MovementRow, Product, SizeBox, StockRow, TermKind } from '../../lib/types';
@@ -27,6 +27,9 @@ export default function ProductScreen() {
   const [structured, setStructured] = useState(true);
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [gradeId, setGradeId] = useState<string | null>(null);
+  const [gradeNote, setGradeNote] = useState('');
+  /** A new item follows the standard grade (or a recognition entry) until someone picks a grade. */
+  const [gradeTouched, setGradeTouched] = useState(!isNew);
   const [labelIds, setLabelIds] = useState<string[]>([]);
   const [brandId, setBrandId] = useState<string | null>(null);
   const [markIds, setMarkIds] = useState<string[]>([]);
@@ -64,14 +67,21 @@ export default function ProductScreen() {
     setSizeBoxes(fit ?? values);
   }
 
+  const standard = useMemo(
+    () => defaultGradeTerm(data.terms, data.defaultGradeId),
+    [data.terms, data.defaultGradeId],
+  );
+
   /** Fill the parts from a name (an old typed name, or text read by the camera). */
   function fillFromText(text: string) {
     const r = splitName(text, dict, true);
     setCategoryId(r.categoryId);
-    setGradeId(r.gradeId);
     setLabelIds(r.labelIds);
     setBrandId(r.brandId);
     setMarkIds(r.markIds);
+    const resolved = r.gradeId ?? mappedGradeId(r, dict) ?? standard?.id ?? null;
+    setGradeId(resolved);
+    setGradeTouched(true);
     const cat = r.categoryId ? dict.categoryById.get(r.categoryId) : null;
     placeSize(r.size, cat?.size_pattern ?? []);
     setNotUnderstood(r.unknown);
@@ -92,6 +102,8 @@ export default function ProductScreen() {
         setStructured(p.structured);
         setCategoryId(p.category_id);
         setGradeId(p.grade_id);
+        setGradeNote(p.grade_note ?? '');
+        setGradeTouched(true);
         setLabelIds(p.label_ids ?? []);
         setBrandId(p.brand_id);
         setMarkIds(p.mark_ids ?? []);
@@ -156,9 +168,31 @@ export default function ProductScreen() {
   }
 
   const { size, missing } = finishSize(sizeBoxes, pattern);
+  const formParts: Parts = {
+    categoryId,
+    gradeId: null,
+    labelIds,
+    brandId,
+    markIds,
+    size: [],
+    unknown: [],
+    extraBrands: [],
+    sizeDoubt: false,
+  };
+  const suggested = mappedGradeId(formParts, dict);
+  // A new item stays on the standard grade, or on a grade a recognition entry assigns, until a grade is picked.
+  const chosenGrade = isNew && !gradeTouched ? (suggested ?? standard?.id ?? null) : gradeId;
+  const needsRemark = structured && !!standard && chosenGrade !== standard.id;
   const preview = structured
     ? buildName(
-        { category_id: categoryId, grade_id: gradeId, label_ids: labelIds, brand_id: brandId, mark_ids: markIds, size },
+        {
+          category_id: categoryId,
+          grade_id: chosenGrade,
+          label_ids: labelIds,
+          brand_id: brandId,
+          mark_ids: markIds,
+          size,
+        },
         dict,
       )
     : plainName.trim();
@@ -207,7 +241,8 @@ export default function ProductScreen() {
         is_active: active,
         category_id: categoryId,
         structured,
-        grade_id: gradeId,
+        grade_id: chosenGrade,
+        grade_note: needsRemark ? gradeNote.trim() || null : null,
         brand_id: brandId,
         label_ids: labelIds,
         mark_ids: markIds,
@@ -283,9 +318,16 @@ export default function ProductScreen() {
               />
             ))}
           </View>
-          <Text style={styles.muted}>
+            <Text style={styles.muted}>
             Each grade has its own code and stock. Another grade is made by itself when a move picks it on Scan.
           </Text>
+          {versions
+            .filter((v) => v.grade_note)
+            .map((v) => (
+              <Text key={v.id} style={styles.muted}>
+                {gradeName(v.grade_id, dict)}: {v.grade_note}
+              </Text>
+            ))}
         </Card>
       )}
 
@@ -364,10 +406,47 @@ export default function ProductScreen() {
               <PartChips
                 label="Grade"
                 options={options('grade')}
-                value={gradeId ? [gradeId] : []}
-                onChange={(v) => setGradeId(v[0] ?? null)}
+                value={chosenGrade ? [chosenGrade] : []}
+                onChange={(v) => {
+                  setGradeTouched(true);
+                  setGradeId(v[0] ?? null);
+                }}
                 disabled={!editable}
               />
+              {standard && (
+                <Text style={styles.muted}>
+                  Standard grade: {standard.name}. A recognition entry can assign another. Any other grade can take a
+                  remark.
+                </Text>
+              )}
+              {editable && suggested && suggested !== chosenGrade && (
+                <View style={styles.row}>
+                  <Text style={{ color: colors.text, flex: 1 }}>
+                    Recognition assigns grade {gradeName(suggested, dict)}
+                  </Text>
+                  <Chip
+                    label="Use it"
+                    active={false}
+                    onPress={() => {
+                      setGradeTouched(true);
+                      setGradeId(suggested);
+                    }}
+                  />
+                </View>
+              )}
+              {needsRemark && editable && (
+                <Field
+                  label={`Note / Remark for grade ${gradeName(chosenGrade, dict)}`}
+                  value={gradeNote}
+                  onChangeText={setGradeNote}
+                  placeholder={`Why this is not the standard grade ${standard?.name ?? ''}`}
+                  maxLength={400}
+                />
+              )}
+              {needsRemark && !editable && !!gradeNote.trim() && (
+                <Text style={{ color: colors.text }}>Remark: {gradeNote}</Text>
+              )}
+              {!needsRemark && !!gradeNote.trim() && <Text style={styles.muted}>Remark: {gradeNote}</Text>}
               <PartChips
                 label="Labels (up to 3, in order)"
                 options={options('label')}

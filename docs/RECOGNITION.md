@@ -102,8 +102,20 @@ not read the whole page or the quantity.
 
 One item, its stock kept per grade.
 
+- **Standard grade:** every team has a standard grade, **B** until a Team Leader or Oversee changes it
+  (More → Team, and Recognition Table → Grades). A new item uses that grade. New teams are given
+  grades A, B and C.
+- **Recognition assigns a grade:** a category, label, brand or mark can optionally assign a grade.
+  When an item name matches that entry and does not itself name a grade, the item uses the assigned
+  grade instead of the standard one. A grade written in the name wins. The person can still pick
+  another grade. Marks are checked first, then labels, then the brand, then the category.
+- **Remark:** a grade other than the standard one (for example A or C while B is standard) has a
+  Note / Remark on the item, and on the movement when that grade is used on Scan. The remark is
+  stored with the movement (including scans that waited offline). The first remark is also kept on
+  the grade version when that version has none yet.
 - **Scan:** after the item is found, a **Grade** row shows the grades from the Recognition Table
-  (A, B, C …, and **No grade** if the item has a version without one). The item's own grade is picked
+  (A, B, C …, and **No grade** if the item has a version without one). The grade from the name, or
+  from a recognition entry, or else the item's own grade, or else the standard grade, is picked
   already; tap another to move that grade.
 - **Stock per grade** under the item, per location: `WRH: None 4 · A 20 · B 3 = 27`, the picked grade
   in bold.

@@ -52,7 +52,7 @@ export async function setLocationAliases(id: string, aliases: string[]) {
 // Products --------------------------------------------------------------------
 
 const PRODUCT_COLS =
-  'id, barcode, name, unit, min_stock, is_active, category_id, structured, grade_id, brand_id, label_ids, mark_ids, size';
+  'id, barcode, name, unit, min_stock, is_active, category_id, structured, grade_id, brand_id, label_ids, mark_ids, size, grade_note';
 
 /** Reads every row of a query, 1000 at a time (the server's page limit). */
 async function allRows<T>(
@@ -100,6 +100,10 @@ export async function saveProduct(id: string | null, input: ProductInput): Promi
     label_ids: input.structured ? input.label_ids : [],
     mark_ids: input.structured ? input.mark_ids : [],
     size: input.structured ? input.size.map((s) => s.trim()).filter(Boolean) : [],
+    // Left out when an older copy of the item has no remark yet, so a save does not wipe one.
+    ...('grade_note' in input
+      ? { grade_note: input.structured ? input.grade_note?.trim() || null : null }
+      : {}),
   };
   const res = id
     ? await supabase.from('products').update(row).eq('id', id).select(PRODUCT_COLS).single()
@@ -305,7 +309,13 @@ export async function createTeam(teamName: string, displayName: string): Promise
 }
 
 export async function getMyTeam(): Promise<Team | null> {
-  return check(await supabase.from('teams').select('id, name').maybeSingle());
+  return check(await supabase.from('teams').select('id, name, default_grade_id').maybeSingle());
+}
+
+/** Team Leader or Oversee. The grade named B is used while this is unset. */
+export async function setDefaultGrade(gradeId: string) {
+  const { error } = await supabase.rpc('set_default_grade', { p_grade_id: gradeId });
+  if (error) throw new Error(error.message);
 }
 
 export async function renameTeam(id: string, name: string) {
@@ -324,7 +334,7 @@ export async function saveTeamBrand(id: string, name: string, theme: TeamTheme) 
 
 // Recognition Table: categories, grades, labels, brands, marks ---------------------------------
 
-const CATEGORY_COLS = 'id, name, aliases, size_pattern, default_unit';
+const CATEGORY_COLS = 'id, name, aliases, size_pattern, default_unit, target_grade_id';
 
 export async function listCategories(): Promise<Category[]> {
   return check(await supabase.from('categories').select(CATEGORY_COLS).order('name'));
@@ -344,6 +354,7 @@ export async function saveCategory(id: string | null, input: CategoryInput) {
     aliases: input.aliases,
     size_pattern: input.size_pattern,
     default_unit: input.default_unit,
+    target_grade_id: input.target_grade_id,
   };
   const { error } = id
     ? await supabase.from('categories').update(row).eq('id', id)
@@ -358,11 +369,19 @@ export async function deleteCategory(id: string) {
 }
 
 export async function listTerms(): Promise<Term[]> {
-  return check(await supabase.from('recognition_terms').select('id, kind, name, aliases, meaning').order('name'));
+  return check(
+    await supabase.from('recognition_terms').select('id, kind, name, aliases, meaning, target_grade_id').order('name'),
+  );
 }
 
 export async function saveTerm(id: string | null, input: Omit<Term, 'id'>) {
-  const row = { kind: input.kind, name: input.name.trim(), aliases: input.aliases, meaning: input.meaning };
+  const row = {
+    kind: input.kind,
+    name: input.name.trim(),
+    aliases: input.aliases,
+    meaning: input.meaning,
+    target_grade_id: input.kind === 'grade' ? null : input.target_grade_id,
+  };
   const { error } = id
     ? await supabase.from('recognition_terms').update(row).eq('id', id)
     : await supabase.from('recognition_terms').insert(row);

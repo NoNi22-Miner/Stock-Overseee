@@ -34,8 +34,8 @@ export function HistoryItem({ item, showProduct = true }: { item: MovementRow; s
           ? ' (scanned offline)'
           : ''}
         {item.actor_name ? `  ·  by ${item.actor_name}` : ''}
-        {item.note ? `  ·  ${item.note}` : ''}
       </Text>
+      {item.note ? <Text style={{ color: colors.text }}>Note: {item.note}</Text> : null}
     </View>
   );
 }

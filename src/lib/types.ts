@@ -24,17 +24,35 @@ export type Product = {
   label_ids: string[];
   mark_ids: string[];
   size: string[];
+  /** Remark kept when this version's grade is not the team's standard grade. */
+  grade_note?: string | null;
 };
 
 /** One box of a category's size pattern, e.g. { name: 'Panjang', unit: 'm', default: '6m' }. */
 export type SizeBox = { name: string; unit?: string; optional?: boolean; default?: string };
 
-export type Category = { id: string; name: string; aliases: string[]; size_pattern: SizeBox[]; default_unit: string };
+export type Category = {
+  id: string;
+  name: string;
+  aliases: string[];
+  size_pattern: SizeBox[];
+  default_unit: string;
+  /** Grade to use when an item name matches this category and does not name a grade itself. */
+  target_grade_id: string | null;
+};
 
 export type TermKind = 'grade' | 'label' | 'brand' | 'mark';
 
 /** A grade, label, brand or mark in the Recognition Table. */
-export type Term = { id: string; kind: TermKind; name: string; aliases: string[]; meaning: string | null };
+export type Term = {
+  id: string;
+  kind: TermKind;
+  name: string;
+  aliases: string[];
+  meaning: string | null;
+  /** Grade to use when an item name matches this entry and does not name a grade itself. */
+  target_grade_id: string | null;
+};
 
 export type StockRow = {
   product_id: string;
@@ -137,4 +155,4 @@ export type TeamMember = {
   location_ids: string[];
 };
 
-export type Team = { id: string; name: string };
+export type Team = { id: string; name: string; default_grade_id: string | null };

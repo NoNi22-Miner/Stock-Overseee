@@ -102,10 +102,10 @@ export function RecentMoves({
               <Text style={styles.title} numberOfLines={1}>
                 {m.product_name}
               </Text>
-              <Text style={styles.muted} numberOfLines={1}>
+              <Text style={styles.muted} numberOfLines={m.note ? 2 : 1}>
                 {timeAgo(m.scanned_at ?? m.created_at)}
                 {m.actor_name ? ` · ${m.actor_name}` : ''}
-                {m.note ? ` · ${m.note}` : ''}
+                {m.note ? `\nNote: ${m.note}` : ''}
               </Text>
             </View>
             <Text style={qtyStyle}>
