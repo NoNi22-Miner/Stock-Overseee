@@ -1,19 +1,19 @@
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, Switch, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Switch, TextInput, View } from 'react-native';
 import { BarcodeScanner } from '../../components/BarcodeScanner';
 import { HistoryItem } from '../../components/HistoryList';
 import { PartChips, type ChipOption } from '../../components/PartChips';
 import { Button, Card, Chip, Field, styles, Text } from '../../components/ui';
-import { formatQty, getProduct, listHistory, listProducts, saveProduct, stockForProduct } from '../../lib/api';
+import { formatQty, getProduct, listHistory, listProducts, saveProduct, stockForProducts } from '../../lib/api';
 import { useRole } from '../../lib/auth';
-import { defaultGradeTerm, gradeName, gradeVersions, mappedGradeId } from '../../lib/grades';
+import { defaultGradeTerm, gradeList, gradeName, gradeVersions, mappedGradeId } from '../../lib/grades';
 import { cached } from '../../lib/offline';
 import { useRecognition } from '../../lib/recognition';
-import { buildName, finishSize, fitToPattern, patternText, splitName, UNITS, type Parts } from '../../lib/recognize';
+import { buildName, finishSize, fitToPattern, patternText, splitName, UNITS, type Dictionary, type Parts } from '../../lib/recognize';
 import { can } from '../../lib/roles';
 import { colors, fs } from '../../lib/theme';
-import type { MovementRow, Product, SizeBox, StockRow, TermKind } from '../../lib/types';
+import type { MovementRow, Product, SizeBox, StockRow, Term, TermKind } from '../../lib/types';
 
 export default function ProductScreen() {
   const params = useLocalSearchParams<{ id: string; barcode?: string; text?: string }>();
@@ -45,6 +45,11 @@ export default function ProductScreen() {
   const [pickCategory, setPickCategory] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [stock, setStock] = useState<StockRow[]>([]);
+  const [familyStock, setFamilyStock] = useState<StockRow[]>([]);
+  /** A grade to create beside this one, without renaming the open item. */
+  const [addGradeId, setAddGradeId] = useState<string | null>(null);
+  const [addRemark, setAddRemark] = useState('');
+  const [adding, setAdding] = useState(false);
   const [history, setHistory] = useState<MovementRow[]>([]);
   const [camera, setCamera] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -94,7 +99,7 @@ export default function ProductScreen() {
 
   useEffect(() => {
     if (isNew) return;
-    Promise.all([getProduct(params.id), stockForProduct(params.id), listHistory({ productId: params.id, limit: 30 })])
+    Promise.all([getProduct(params.id), stockForProducts([params.id]), listHistory({ productId: params.id, limit: 30 })])
       .then(([p, s, h]) => {
         setLoaded(p);
         setBarcode(p.barcode);
@@ -116,6 +121,7 @@ export default function ProductScreen() {
         setMinStock(formatQty(Number(p.min_stock)));
         setActive(p.is_active);
         setStock(s);
+        setFamilyStock(s);
         setHistory(h);
       })
       .catch((e) => Alert.alert('Error', e.message))
@@ -205,6 +211,21 @@ export default function ProductScreen() {
     () => (loaded?.structured ? gradeVersions(products, loaded, dict) : []),
     [loaded, products, dict],
   );
+  const versionKey = versions.map((v) => v.id).join(',');
+  useEffect(() => {
+    if (isNew || !versionKey) return;
+    let alive = true;
+    stockForProducts(versionKey.split(','))
+      .then((rows) => {
+        if (!alive) return;
+        setFamilyStock(rows);
+        setStock(rows.filter((r) => r.product_id === params.id));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [isNew, versionKey, params.id]);
   const siblings = versions.filter((v) => v.id !== loaded?.id);
   const sameList = (a: string[] = [], b: string[] = []) => a.length === b.length && a.every((x, i) => x === b[i]);
   const partsChanged =
@@ -228,6 +249,41 @@ export default function ProductScreen() {
   else if (!structured && !plainName.trim()) problem = 'Type a name';
   else if (duplicate) problem = 'This item already exists';
   else if (!(minNum >= 0)) problem = 'Min stock must be 0 or more';
+
+  async function addSibling() {
+    if (!loaded?.structured || !addGradeId) return;
+    const exists = versions.some((v) => v.grade_id === addGradeId);
+    if (exists) {
+      const other = versions.find((v) => v.grade_id === addGradeId);
+      if (other) router.replace(`/product/${other.id}`);
+      return;
+    }
+    setAdding(true);
+    try {
+      const created = await saveProduct(null, {
+        barcode: '',
+        name: loaded.name,
+        unit: loaded.unit,
+        min_stock: 0,
+        is_active: loaded.is_active,
+        category_id: loaded.category_id,
+        structured: true,
+        grade_id: addGradeId,
+        grade_note: standard && addGradeId !== standard.id ? addRemark.trim() || null : null,
+        brand_id: loaded.brand_id,
+        label_ids: loaded.label_ids ?? [],
+        mark_ids: loaded.mark_ids ?? [],
+        size: loaded.size ?? [],
+      });
+      const fresh = await listProducts().catch(() => null);
+      if (fresh) setProducts(fresh);
+      router.replace(`/product/${created.id}`);
+    } catch (e) {
+      Alert.alert('Could not add grade', (e as Error).message);
+    } finally {
+      setAdding(false);
+    }
+  }
 
   async function save() {
     if (problem) return;
@@ -305,30 +361,25 @@ export default function ProductScreen() {
         </Card>
       )}
 
-      {siblings.length > 0 && (
-        <Card style={{ gap: 6 }}>
-          <Text style={styles.label}>Grades of this item</Text>
-          <View style={styles.chipRow}>
-            {versions.map((v) => (
-              <Chip
-                key={v.id}
-                label={`${gradeName(v.grade_id, dict)} · ${v.barcode}${v.is_active ? '' : ' (inactive)'}`}
-                active={v.id === loaded?.id}
-                onPress={() => v.id !== loaded?.id && router.replace(`/product/${v.id}`)}
-              />
-            ))}
-          </View>
-            <Text style={styles.muted}>
-            Each grade has its own code and stock. Another grade is made by itself when a move picks it on Scan.
-          </Text>
-          {versions
-            .filter((v) => v.grade_note)
-            .map((v) => (
-              <Text key={v.id} style={styles.muted}>
-                {gradeName(v.grade_id, dict)}: {v.grade_note}
-              </Text>
-            ))}
-        </Card>
+      {loaded?.structured && (
+        <GradeTable
+          versions={versions}
+          stock={familyStock}
+          dict={dict}
+          currentId={loaded.id}
+          unit={loaded.unit}
+          editable={editable}
+          missing={gradeList(data.terms).filter((g) => !versions.some((v) => v.grade_id === g.id))}
+          addGradeId={addGradeId}
+          addRemark={addRemark}
+          standardId={standard?.id ?? null}
+          standardName={standard?.name ?? 'B'}
+          adding={adding}
+          onOpen={(id) => id !== loaded.id && router.replace(`/product/${id}`)}
+          onPickAdd={setAddGradeId}
+          onRemark={setAddRemark}
+          onAdd={addSibling}
+        />
       )}
 
       <Card style={{ borderColor: colors.primary }}>
@@ -408,8 +459,19 @@ export default function ProductScreen() {
                 options={options('grade')}
                 value={chosenGrade ? [chosenGrade] : []}
                 onChange={(v) => {
+                  const id = v[0] ?? null;
+                  if (!isNew && loaded) {
+                    if (!id || id === loaded.grade_id) return;
+                    const other = versions.find((x) => x.grade_id === id);
+                    if (other) {
+                      router.replace(`/product/${other.id}`);
+                      return;
+                    }
+                    setAddGradeId(id);
+                    return;
+                  }
                   setGradeTouched(true);
-                  setGradeId(v[0] ?? null);
+                  setGradeId(id);
                 }}
                 disabled={!editable}
               />
@@ -428,6 +490,12 @@ export default function ProductScreen() {
                     label="Use it"
                     active={false}
                     onPress={() => {
+                      if (!isNew && loaded) {
+                        const other = versions.find((x) => x.grade_id === suggested);
+                        if (other) router.replace(`/product/${other.id}`);
+                        else setAddGradeId(suggested);
+                        return;
+                      }
                       setGradeTouched(true);
                       setGradeId(suggested);
                     }}
@@ -598,5 +666,128 @@ export default function ProductScreen() {
         }}
       />
     </ScrollView>
+  );
+}
+
+/** Every grade of this item, with its quantity and remark, and a way to add another grade beside it. */
+function GradeTable({
+  versions,
+  stock,
+  dict,
+  currentId,
+  unit,
+  editable,
+  missing,
+  addGradeId,
+  addRemark,
+  standardId,
+  standardName,
+  adding,
+  onOpen,
+  onPickAdd,
+  onRemark,
+  onAdd,
+}: {
+  versions: Product[];
+  stock: StockRow[];
+  dict: Dictionary;
+  currentId: string;
+  unit: string;
+  editable: boolean;
+  missing: Term[];
+  addGradeId: string | null;
+  addRemark: string;
+  standardId: string | null;
+  standardName: string;
+  adding: boolean;
+  onOpen: (id: string) => void;
+  onPickAdd: (id: string | null) => void;
+  onRemark: (text: string) => void;
+  onAdd: () => void;
+}) {
+  const locations = [...new Map(stock.map((s) => [s.location_id, s.location_code])).entries()];
+  const rows = versions.map((v) => {
+    const mine = stock.filter((s) => s.product_id === v.id);
+    const byLoc = new Map(mine.map((s) => [s.location_id, s.qty]));
+    const total = mine.reduce((n, s) => n + s.qty, 0);
+    return { v, byLoc, total };
+  });
+  const needsRemark = !!addGradeId && addGradeId !== standardId;
+  return (
+    <Card style={{ gap: 8 }}>
+      <Text style={styles.label}>Grades of this item</Text>
+      {rows.map(({ v, byLoc, total }) => {
+        const here = v.id === currentId;
+        return (
+          <Pressable
+            key={v.id}
+            onPress={() => onOpen(v.id)}
+            style={{
+              gap: 2,
+              borderWidth: 1,
+              borderColor: here ? colors.primary : colors.border,
+              borderRadius: 10,
+              padding: 8,
+            }}
+          >
+            <View style={[styles.row, { justifyContent: 'space-between' }]}>
+              <Text style={{ color: colors.text, fontWeight: '800' }}>
+                {gradeName(v.grade_id, dict)}
+                {here ? ' · this one' : ''}
+              </Text>
+              <Text style={{ color: colors.text, fontWeight: '800' }}>
+                {formatQty(total)} {unit}
+              </Text>
+            </View>
+            {locations.length > 1 && (
+              <Text style={styles.muted}>
+                {locations.map(([id, code]) => `${code} ${formatQty(byLoc.get(id) ?? 0)}`).join('  ·  ')}
+              </Text>
+            )}
+            {locations.length === 1 && (
+              <Text style={styles.muted}>
+                {locations[0][1]} {formatQty(byLoc.get(locations[0][0]) ?? 0)}
+              </Text>
+            )}
+            <Text style={styles.muted}>{v.barcode}{v.is_active ? '' : ' · inactive'}</Text>
+            {!!v.grade_note && <Text style={{ color: colors.text }}>Remark: {v.grade_note}</Text>}
+          </Pressable>
+        );
+      })}
+      <Text style={styles.muted}>
+        Each grade has its own code and stock. Tap a grade to open it. Adding a grade keeps this one as it is.
+      </Text>
+      {editable && missing.length > 0 && (
+        <View style={{ gap: 8 }}>
+          <Text style={styles.label}>Add a grade</Text>
+          <View style={styles.chipRow}>
+            {missing.map((g) => (
+              <Chip
+                key={g.id}
+                label={g.name}
+                active={addGradeId === g.id}
+                onPress={() => onPickAdd(addGradeId === g.id ? null : g.id)}
+              />
+            ))}
+          </View>
+          {needsRemark && (
+            <Field
+              label={`Note / Remark for grade ${gradeName(addGradeId, dict)}`}
+              value={addRemark}
+              onChangeText={onRemark}
+              placeholder={`Why this is not the standard grade ${standardName}`}
+              maxLength={400}
+            />
+          )}
+          {addGradeId && (
+            <Button
+              title={`Add grade ${gradeName(addGradeId, dict)}`}
+              onPress={onAdd}
+              loading={adding}
+            />
+          )}
+        </View>
+      )}
+    </Card>
   );
 }

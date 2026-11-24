@@ -5,9 +5,9 @@ import * as Sharing from 'expo-sharing';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, FlatList, Platform, View } from 'react-native';
 import { Button, Card, Chip, styles, Text } from '../components/ui';
-import { importItems, listProducts } from '../lib/api';
+import { importItems, listLocations, listProducts } from '../lib/api';
 import { defaultGradeTerm } from '../lib/grades';
-import { checkImport, TEMPLATE_EXAMPLE, TEMPLATE_HEADER, type ImportCheck, type ImportStatus } from '../lib/itemImport';
+import { checkImport, TEMPLATE_EXAMPLE, TEMPLATE_HEADER, type ImportCheck, type ImportPlace, type ImportStatus } from '../lib/itemImport';
 import { cached, cacheSet, useOnline } from '../lib/offline';
 import { useRecognition } from '../lib/recognition';
 import { colors, themed } from '../lib/theme';
@@ -32,6 +32,7 @@ export default function ImportScreen() {
   const { dict, data, reload } = useRecognition();
   const standardName = defaultGradeTerm(data.terms, data.defaultGradeId)?.name ?? null;
   const [products, setProducts] = useState<Product[]>([]);
+  const [places, setPlaces] = useState<ImportPlace[] | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [sheet, setSheet] = useState<string[][] | null>(null);
   const [show, setShow] = useState<ImportStatus | 'all'>('all');
@@ -42,11 +43,14 @@ export default function ImportScreen() {
     cached('products', listProducts)
       .then((r) => setProducts(r.value))
       .catch(() => {});
+    listLocations()
+      .then((rows) => setPlaces(rows.map((l) => ({ code: l.code, name: l.name, aliases: l.aliases }))))
+      .catch(() => setPlaces([]));
   }, []);
 
   const check: ImportCheck | null = useMemo(
-    () => (sheet ? checkImport(sheet, dict, products, standardName) : null),
-    [sheet, dict, products, standardName],
+    () => (sheet ? checkImport(sheet, dict, products, standardName, places) : null),
+    [sheet, dict, products, standardName, places],
   );
   const counts = useMemo(() => {
     const c: Record<ImportStatus, number> = { new: 0, exists: 0, repeat: 0, problem: 0 };
@@ -118,11 +122,13 @@ export default function ImportScreen() {
       let added = 0;
       let skipped = 0;
       let lists = 0;
+      let stocked = 0;
       for (let i = 0; i < items.length; i += 500) {
         const r = await importItems(items.slice(i, i + 500));
         added += r.added;
         skipped += r.skipped;
         lists += r.new_list_entries;
+        stocked += r.stocked ?? 0;
       }
       const fresh = await listProducts();
       cacheSet('products', fresh);
@@ -131,6 +137,7 @@ export default function ImportScreen() {
       setSheet(null);
       setDone(
         `Added ${added} item${added === 1 ? '' : 's'}` +
+          (stocked ? `, opening stock on ${stocked}` : '') +
           (skipped ? `, ${skipped} already existed` : '') +
           (lists ? `, ${lists} new Recognition Table entr${lists === 1 ? 'y' : 'ies'}` : '') +
           '.',
@@ -158,8 +165,10 @@ export default function ImportScreen() {
               Recognition Table.
             </Text>
             <Text style={{ color: colors.text }}>
-              2. The template: Category · Grade · Label 1-3 · Size 1-5 · Brand · Mark · Unit · Min stock · Code. Missing
-              categories, labels and brands are added.
+              2. The template: Category · Grade · Label 1-3 · Size 1-5 · Brand · Mark · Unit · Min stock · Code, and
+              optionally Qty · Location · Remark. A blank grade uses the standard grade. Qty is opening stock at
+              Location, or at the warehouse when Location is blank. A remark is kept only on a grade other than the
+              standard one. Missing categories, labels and brands are added.
             </Text>
             <Text style={styles.muted}>Nothing is saved until you check the list and tap Import.</Text>
           </Card>
@@ -221,8 +230,10 @@ export default function ImportScreen() {
           <Text style={styles.muted}>
             Row {r.row} · {STATUS[r.status].label}
             {r.item ? ` · ${r.item.unit}` : ''}
+            {r.item?.qty ? ` · opening ${r.item.qty}${r.item.location ? ` at ${r.item.location}` : ' at warehouse'}` : ''}
           </Text>
           <Text style={styles.title}>{r.name ?? r.source}</Text>
+          {r.item?.remark ? <Text style={styles.muted}>Remark: {r.item.remark}</Text> : null}
           {r.name && r.name !== r.source && <Text style={styles.muted}>From: {r.source}</Text>}
           {r.problem && <Text style={{ color: r.status === 'problem' ? colors.out : colors.muted }}>{r.problem}</Text>}
         </View>

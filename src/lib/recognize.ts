@@ -68,7 +68,15 @@ const longestFirst = (a: Spelling, b: Spelling) => b.text.length - a.text.length
 
 export function buildDictionary(categories: Category[], terms: Term[]): Dictionary {
   const byKind: Record<TermKind, Spelling[]> = { grade: [], label: [], brand: [], mark: [] };
-  for (const t of terms) byKind[t.kind].push(...spellings(t.id, t.name, t.aliases));
+  for (const t of terms) {
+    const aliases = [...(t.aliases ?? [])];
+    // "Grade A" and "(Grade A)" are the same grade as the letter. The database stores this alias too.
+    const letter = cleanText(t.name);
+    if (t.kind === 'grade' && /^[ABC]$/.test(letter) && !aliases.some((a) => cleanText(a) === `GRADE ${letter}`)) {
+      aliases.push(`GRADE ${letter}`);
+    }
+    byKind[t.kind].push(...spellings(t.id, t.name, aliases));
+  }
   for (const k of Object.keys(byKind) as TermKind[]) byKind[k].sort(longestFirst);
   return {
     categories: categories.flatMap((c) => spellings(c.id, c.name, c.aliases)).sort(longestFirst),
@@ -255,7 +263,7 @@ export function splitName(input: string, dict: Dictionary, fuzzy = false): Parts
   const unknown = text
     .split(' ')
     .map((w) => w.replace(/^[^A-Z0-9*]+|[^A-Z0-9*]+$/g, ''))
-    .filter(Boolean);
+    .filter((w) => w && !(gradeId && w === 'GRADE'));
   return {
     categoryId,
     gradeId,
