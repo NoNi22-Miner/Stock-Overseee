@@ -2,9 +2,11 @@
 // Two layouts are accepted:
 //  - plain names, one per row (like the DO system's item list): split with the Recognition Table
 //  - the template: Category · Grade · Label 1-3 · Size 1-5 · Brand · Mark · Unit · Min stock · Code
+//    and, optionally, Qty · Location · Remark
 import type { ImportItem } from './api';
 import { importGradeName } from './grades';
 import {
+  allowsDecimals,
   applySizeDefaults,
   cleanText,
   findCategory,
@@ -33,6 +35,9 @@ export const TEMPLATE_HEADER = [
   'Unit',
   'Min stock',
   'Code',
+  'Qty',
+  'Location',
+  'Remark',
 ];
 
 export const TEMPLATE_EXAMPLE = [
@@ -50,6 +55,9 @@ export const TEMPLATE_EXAMPLE = [
   '',
   'Lembar',
   '5',
+  '',
+  '',
+  '',
   '',
 ];
 
@@ -75,6 +83,50 @@ export type ImportCheck = {
 const NAME_HEADERS = ['name', 'item', 'item name', 'nama', 'nama barang', 'barang', 'description', 'deskripsi'];
 
 const unitOf = (text: string) => UNITS.find((u) => u.toUpperCase() === cleanText(text)) ?? null;
+
+export type ImportPlace = { code: string; name: string; aliases?: string[] | null };
+
+const QTY_HEADERS = ['qty', 'quantity', 'opening', 'opening stock', 'on hand', 'stock qty', 'jumlah', 'stok'];
+const LOC_HEADERS = ['location', 'loc', 'warehouse', 'gudang', 'lokasi'];
+const REMARK_HEADERS = ['remark', 'note', 'notes', 'grade note', 'grade remark', 'catatan'];
+
+function matchPlace(text: string, places: ImportPlace[]) {
+  const t = cleanText(text);
+  if (!t) return undefined;
+  return places.find(
+    (p) => cleanText(p.code) === t || cleanText(p.name) === t || (p.aliases ?? []).some((a) => cleanText(a) === t),
+  );
+}
+
+/** Blank quantity leaves stock alone. A remark on the standard grade is dropped. */
+function openingOf(
+  item: ImportItem,
+  qtyText: string,
+  locationText: string,
+  remarkText: string,
+  standardGrade: string | null,
+  places: ImportPlace[] | null,
+): string | undefined {
+  const rawQty = qtyText.trim();
+  if (rawQty) {
+    const n = Number(rawQty.replace(',', '.'));
+    if (!(n >= 0)) return 'Opening stock must be 0 or more';
+    if (!allowsDecimals(item.unit) && !Number.isInteger(n)) return `${item.unit} is counted in whole numbers`;
+    item.qty = n > 0 ? n : null;
+  }
+  const loc = locationText.trim();
+  if (loc) {
+    if (places && !matchPlace(loc, places)) return `Location "${loc}" was not found`;
+    item.location = loc;
+  } else if (item.qty && places && places.length === 0) {
+    return 'Add a location before importing opening stock';
+  }
+  const remark = remarkText.trim();
+  if (remark.length > 400) return 'Remark must be 400 characters or less';
+  const standard = standardGrade?.trim().toUpperCase() ?? '';
+  if (remark && item.grade?.trim().toUpperCase() !== standard) item.remark = remark;
+  return undefined;
+}
 
 const idsOf = (names: string[], kind: TermKind, dict: Dictionary) =>
   names.map((n) => findTerm(dict, kind, n)?.id).filter((id): id is string => !!id);
@@ -102,11 +154,16 @@ export function checkImport(
   dict: Dictionary,
   products: Product[],
   standardGrade: string | null = null,
+  places: ImportPlace[] | null = null,
 ): ImportCheck {
   const rows = sheet.map((r) => r.map((c) => (c ?? '').toString().trim()));
   const firstIdx = rows.findIndex((r) => r.some(Boolean));
   const header = (rows[firstIdx] ?? []).map((c) => c.toLowerCase());
   const col = (name: string) => header.indexOf(name.toLowerCase());
+  const findCol = (names: string[]) => names.map((n) => col(n)).find((i) => i >= 0) ?? -1;
+  const qtyCol = findCol(QTY_HEADERS);
+  const locCol = findCol(LOC_HEADERS);
+  const remarkCol = findCol(REMARK_HEADERS);
 
   const existing = new Set(products.filter((p) => p.structured).map((p) => p.name.toUpperCase()));
   const inFile = new Map<string, number>();
@@ -198,6 +255,15 @@ export function checkImport(
         barcode: get(r, idx.code) || null,
       };
       if (cat) item.size = applySizeDefaults(item.size, cat.size_pattern);
+      const openingProblem = openingOf(
+        item,
+        get(r, qtyCol),
+        get(r, locCol),
+        get(r, remarkCol),
+        standardGrade,
+        places,
+      );
+      if (openingProblem) return finish({ row: i + 1, source, status: 'problem', problem: openingProblem, item, name: nameFromText(item) });
       finish({ row: i + 1, source, status: 'new', item, name: nameFromText(item) });
     });
     return { layout: 'template', rows: out, newEntries: [...newEntries].sort() };
@@ -229,6 +295,17 @@ export function checkImport(
       unit: cat.default_unit,
       min_stock: 0,
     };
+    const openingProblem = openingOf(
+      item,
+      qtyCol >= 0 ? (r[qtyCol] ?? '') : '',
+      locCol >= 0 ? (r[locCol] ?? '') : '',
+      remarkCol >= 0 ? (r[remarkCol] ?? '') : '',
+      standardGrade,
+      places,
+    );
+    if (openingProblem) {
+      return finish({ row: i + 1, source, status: 'problem', problem: openingProblem, item, name: nameFromText(item) });
+    }
     finish({ row: i + 1, source, status: 'new', item, name: nameFromText(item) });
   });
   return { layout: 'names', rows: out, newEntries: [] };

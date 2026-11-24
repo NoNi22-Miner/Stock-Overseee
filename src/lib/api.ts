@@ -136,9 +136,12 @@ export async function stockAtLocation(locationId: string, search = ''): Promise<
 }
 
 export async function stockForProduct(productId: string): Promise<StockRow[]> {
-  return check(await supabase.from('stock_overview').select(STOCK_COLS).eq('product_id', productId)).map(
-    normalizeStock,
-  );
+  return stockForProducts([productId]);
+}
+
+export async function stockForProducts(ids: string[]): Promise<StockRow[]> {
+  if (!ids.length) return [];
+  return check(await supabase.from('stock_overview').select(STOCK_COLS).in('product_id', ids)).map(normalizeStock);
 }
 
 export async function lowStockCounts(): Promise<Record<string, number>> {
@@ -418,13 +421,19 @@ export type ImportItem = {
   unit: string;
   min_stock?: number;
   barcode?: string | null;
+  /** Opening on-hand quantity. Blank or 0 does not change stock. */
+  qty?: number | null;
+  /** Location code, name, or other spelling. Blank uses the team's warehouse. */
+  location?: string | null;
+  /** Kept on the item only when its grade is not the standard grade. */
+  remark?: string | null;
 };
 
 /** Adds the items (and any missing categories / list entries); items that already exist are skipped. */
 export async function importItems(items: ImportItem[]) {
   const { data, error } = await supabase.rpc('import_items', { p_items: items });
   if (error) throw new Error(error.message);
-  return data as { added: number; skipped: number; new_list_entries: number };
+  return data as { added: number; skipped: number; stocked: number; new_list_entries: number };
 }
 
 // Location access ----------------------------------------------------------------
