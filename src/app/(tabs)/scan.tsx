@@ -19,7 +19,16 @@ import { describeMove } from '../../components/HistoryList';
 import { Button, Card, Chip, Field, styles, Text } from '../../components/ui';
 import { formatQty, listHistory, listLocations, listMyStock, listProducts, recordAdjustment } from '../../lib/api';
 import { useAuth, useMoveAccess, useRole } from '../../lib/auth';
-import { familyKey, gradeList, gradeName, gradeShort, gradeVersions, versionName } from '../../lib/grades';
+import {
+  defaultGradeTerm,
+  familyKey,
+  gradeList,
+  gradeName,
+  gradeShort,
+  gradeVersions,
+  mappedGradeId,
+  versionName,
+} from '../../lib/grades';
 import { cached, submitScan, useOnline, useQueue, type QueuedScan } from '../../lib/offline';
 import { useRecognition } from '../../lib/recognition';
 import { allowsDecimals, isSure, rankItems, splitName, type ItemMatch } from '../../lib/recognize';
@@ -72,6 +81,8 @@ export default function ScanScreen() {
   const [gradeId, setGradeId] = useState<string | null>(null);
   /** The grade written on the label that was read, if any. */
   const [readGrade, setReadGrade] = useState<string | null>(null);
+  /** Grade a recognition entry assigned for the text just read. Null when the text named none. */
+  const [nameGrade, setNameGrade] = useState<string | null>(null);
   const [qty, setQty] = useState('1');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -138,6 +149,11 @@ export default function ScanScreen() {
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const grades = useMemo(() => gradeList(recognition.data.terms), [recognition.data.terms]);
+  const standard = useMemo(
+    () => defaultGradeTerm(recognition.data.terms, recognition.data.defaultGradeId),
+    [recognition.data.terms, recognition.data.defaultGradeId],
+  );
+  const standardId = standard?.id ?? null;
 
   /** The version of item p with this grade on this phone (active), or null if it is not made yet. */
   const findVersion = useCallback(
@@ -183,10 +199,15 @@ export default function ScanScreen() {
     [product, gradeId, versionStock],
   );
 
-  /** Use this item; `grade` (e.g. read from the label) picks another grade of it. */
+  /**
+   * Use this item. `grade` is the grade the name assigned (a grade in the text, or a recognition
+   * entry). Leave it out to use the grade already stored for this lookup. A structured item with
+   * no grade of its own uses the standard grade.
+   */
   function choose(p: Product, learnIt = false, grade?: string | null) {
     if (learnIt && pickFor) recognition.learn(pickFor, p.id);
-    const g = grade !== undefined && p.structured ? grade : p.grade_id;
+    const fromName = grade !== undefined ? grade : nameGrade;
+    const g = !p.structured ? p.grade_id : (fromName ?? p.grade_id ?? standardId);
     setPickFor(null);
     setPicker(false);
     setProduct(p);
@@ -215,11 +236,13 @@ export default function ScanScreen() {
       : rankItems(blocks, list, recognition.dict, recognition.learned, 12)
           .filter((m) => !seen.has(familyKey(m.product)) && !!seen.add(familyKey(m.product)))
           .slice(0, 6);
-    const grade = exact ? null : splitName(text, recognition.dict, true).gradeId;
-    setReadGrade(grade);
+    const parts = exact ? null : splitName(text, recognition.dict, true);
+    const mapped = parts ? mappedGradeId(parts, recognition.dict) : null;
+    setReadGrade(parts?.gradeId ?? null);
+    setNameGrade(mapped);
     setMatches(found);
     if (exact || isSure(found)) {
-      choose(found[0].product, false, grade ?? undefined);
+      choose(found[0].product, false, mapped);
     } else {
       setProduct(null);
       setPickFor(text);
@@ -238,6 +261,7 @@ export default function ScanScreen() {
     setProduct(null);
     setGradeId(null);
     setReadGrade(null);
+    setNameGrade(null);
     setQty('1');
     setNote('');
   }
@@ -279,6 +303,7 @@ export default function ScanScreen() {
     [product, products, recognition.dict],
   );
   const showGrades = !!product?.structured && grades.length > 0;
+  const gradeIsSpecial = showGrades && !!standard && gradeId !== standard.id;
   const gradeChoices: (string | null)[] = [
     ...(versions.some((v) => !v.grade_id) ? [null] : []),
     ...grades.map((g) => g.id),
@@ -317,19 +342,20 @@ export default function ScanScreen() {
     try {
       if (mode === 'ADJUST') {
         await recordAdjustment({
-          productId: target?.id ?? product.id,
+          productId: showGrades ? product.id : (target?.id ?? product.id),
           locationId: fromId!,
           newQty: qtyNum,
           note,
-          grade: newVersion ? { id: gradeId } : undefined,
+          // Graded save finds or makes the version and keeps the first remark on it.
+          grade: showGrades ? { id: gradeId } : undefined,
         });
         setMessage({ ok: true, text: `Saved: ${name} — ${summary}` });
       } else {
         const { queued } = await submitScan({
           kind: mode,
-          product_id: target?.id ?? product.id,
+          product_id: showGrades ? product.id : (target?.id ?? product.id),
           product_name: name,
-          ...(newVersion ? { pick_grade: true, grade_id: gradeId } : {}),
+          ...(showGrades ? { pick_grade: true, grade_id: gradeId } : {}),
           unit: product.unit,
           qty: qtyNum,
           from_id: usesFrom ? fromId : null,
@@ -350,8 +376,8 @@ export default function ScanScreen() {
       reset();
       loadStock().catch(() => {});
       loadRecent();
-      // A new grade version was made: load it, so it is found next time.
-      if (newVersion) {
+      // A new grade version, or a remark just stored on one, should be on this phone next time.
+      if (newVersion || (gradeIsSpecial && note.trim())) {
         cached('products', listProducts)
           .then((r) => setProducts(r.value))
           .catch(() => {});
@@ -391,6 +417,7 @@ export default function ScanScreen() {
       setProduct(p);
       setGradeId(p.grade_id);
       setReadGrade(null);
+      setNameGrade(null);
       setQty(formatQty(m.qty));
       setMessage(null);
     } else {
@@ -658,6 +685,17 @@ export default function ScanScreen() {
                     The label says grade {gradeName(readGrade, recognition.dict)}
                   </Text>
                 )}
+                {nameGrade && nameGrade !== gradeId && nameGrade !== readGrade && (
+                  <Text style={{ color: colors.warn, fontWeight: '600' }}>
+                    Recognition assigns grade {gradeName(nameGrade, recognition.dict)}
+                  </Text>
+                )}
+                {standard && (
+                  <Text style={styles.muted}>
+                    Standard grade: {standard.name}
+                    {gradeId !== standard.id ? '. Add a remark for this grade.' : '.'}
+                  </Text>
+                )}
                 {!target && (
                   <Text style={styles.muted}>
                     {mode === 'IN' || mode === 'ADJUST'
@@ -734,11 +772,19 @@ export default function ScanScreen() {
               />
               <Button title="+" variant="outline" onPress={() => step(1)} style={{ width: 56 }} />
             </View>
+            {target?.grade_note ? <Text style={styles.muted}>Item remark: {target.grade_note}</Text> : null}
             <Field
-              label="Note (optional)"
+              label={gradeIsSpecial ? 'Note / Remark' : 'Note (optional)'}
               value={note}
               onChangeText={setNote}
-              placeholder={isAdjust ? 'e.g. stock count, damaged' : 'e.g. supplier, invoice no.'}
+              maxLength={400}
+              placeholder={
+                gradeIsSpecial
+                  ? `Why this is grade ${gradeName(gradeId, recognition.dict)}, not ${standard?.name ?? 'the standard grade'}`
+                  : isAdjust
+                    ? 'e.g. stock count, damaged'
+                    : 'e.g. supplier, invoice no.'
+              }
             />
 
             {problem && <Text style={{ color: colors.out }}>{problem}</Text>}

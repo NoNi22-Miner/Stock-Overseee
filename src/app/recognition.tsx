@@ -1,8 +1,9 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { Alert, FlatList, Pressable, ScrollView, Switch, TextInput, View } from 'react-native';
+import { DefaultGradePicker } from '../components/DefaultGradePicker';
 import { Button, Card, Chip, Field, styles, Text } from '../components/ui';
-import { deleteCategory, deleteTerm, listProducts, saveCategory, saveTerm } from '../lib/api';
+import { deleteCategory, deleteTerm, listProducts, saveCategory, saveTerm, setDefaultGrade } from '../lib/api';
 import { useRole } from '../lib/auth';
 import { cached } from '../lib/offline';
 import { useRecognition } from '../lib/recognition';
@@ -26,9 +27,25 @@ const splitList = (s: string) =>
     .map((x) => x.trim().replace(/\s+/g, ' '))
     .filter(Boolean);
 
-type Draft = { id: string | null; name: string; aliases: string; meaning: string; unit: string; pattern: SizeBox[] };
+type Draft = {
+  id: string | null;
+  name: string;
+  aliases: string;
+  meaning: string;
+  unit: string;
+  pattern: SizeBox[];
+  targetGradeId: string | null;
+};
 
-const emptyDraft = (unit = 'Pcs'): Draft => ({ id: null, name: '', aliases: '', meaning: '', unit, pattern: [] });
+const emptyDraft = (unit = 'Pcs'): Draft => ({
+  id: null,
+  name: '',
+  aliases: '',
+  meaning: '',
+  unit,
+  pattern: [],
+  targetGradeId: null,
+});
 
 /** Team Leader / Oversee: the lists items are built from. Everyone else can look. */
 export default function RecognitionScreen() {
@@ -78,7 +95,17 @@ export default function RecognitionScreen() {
       meaning: c ? '' : ((e as Term).meaning ?? ''),
       unit: c?.default_unit ?? 'Pcs',
       pattern: c ? (c.size_pattern ?? []).map((b) => ({ ...b })) : [],
+      targetGradeId: (c ? c.target_grade_id : (e as Term).target_grade_id) ?? null,
     });
+  }
+
+  async function pickDefault(gradeId: string) {
+    try {
+      await setDefaultGrade(gradeId);
+      await reload();
+    } catch (e) {
+      Alert.alert('Could not save the standard grade', (e as Error).message);
+    }
   }
 
   async function save() {
@@ -90,6 +117,7 @@ export default function RecognitionScreen() {
           name: draft.name,
           aliases: splitList(draft.aliases),
           default_unit: draft.unit,
+          target_grade_id: draft.targetGradeId,
           size_pattern: draft.pattern
             .map((b) => ({
               name: b.name.trim(),
@@ -105,6 +133,7 @@ export default function RecognitionScreen() {
           name: draft.name,
           aliases: splitList(draft.aliases),
           meaning: draft.meaning.trim() || null,
+          target_grade_id: tab === 'grade' ? null : draft.targetGradeId,
         });
       }
       setDraft(null);
@@ -166,6 +195,7 @@ export default function RecognitionScreen() {
           maxLength={120}
         />
       )}
+      {tab !== 'grade' && <GradeAssign grades={data.terms.filter((t) => t.kind === 'grade')} draft={draft} setDraft={setDraft} />}
       {tab === 'category' && (
         <>
           <Text style={styles.label}>Default unit</Text>
@@ -268,8 +298,18 @@ export default function RecognitionScreen() {
           </ScrollView>
           <Text style={styles.muted}>
             Items are named from these lists: Category Grade · Labels · Size · Brand Mark. Other spellings help the
-            camera and the Excel import recognise paperwork.
+            camera and the Excel import recognise paperwork. A category, label, brand or mark can assign a grade.
           </Text>
+          {tab === 'grade' && (
+            <Card>
+              <DefaultGradePicker
+                terms={data.terms}
+                configuredId={data.defaultGradeId}
+                onPick={pickDefault}
+                disabled={!manage}
+              />
+            </Card>
+          )}
           {error && <Text style={{ color: colors.out }}>{error}</Text>}
           {editor}
           {!draft && (
@@ -304,6 +344,11 @@ export default function RecognitionScreen() {
               </Text>
             </View>
             {!!item.aliases?.length && <Text style={styles.muted}>Also: {item.aliases.join(', ')}</Text>}
+            {item.target_grade_id && (
+              <Text style={styles.muted}>
+                Assigns grade {data.terms.find((g) => g.id === item.target_grade_id)?.name ?? '?'}
+              </Text>
+            )}
             {t?.meaning && <Text style={{ color: colors.text }}>{t.meaning}</Text>}
             {c && (
               <Text style={{ color: colors.text }}>
@@ -314,5 +359,43 @@ export default function RecognitionScreen() {
         );
       }}
     />
+  );
+}
+
+/** Grade this entry assigns when an item name matches it and does not name a grade itself. */
+function GradeAssign({
+  grades,
+  draft,
+  setDraft,
+}: {
+  grades: Term[];
+  draft: Draft;
+  setDraft: (d: Draft) => void;
+}) {
+  const sorted = [...grades].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  return (
+    <View style={{ gap: 6 }}>
+      <Text style={styles.label}>Assign grade</Text>
+      <View style={styles.chipRow}>
+        <Chip
+          label="Standard grade"
+          active={!draft.targetGradeId}
+          color={colors.muted}
+          onPress={() => setDraft({ ...draft, targetGradeId: null })}
+        />
+        {sorted.map((g) => (
+          <Chip
+            key={g.id}
+            label={g.name}
+            active={draft.targetGradeId === g.id}
+            onPress={() => setDraft({ ...draft, targetGradeId: g.id })}
+          />
+        ))}
+      </View>
+      <Text style={styles.muted}>
+        When an item name matches this entry and does not name a grade, the item uses this grade instead of the
+        standard one. You can still change the grade on the item.
+      </Text>
+    </View>
   );
 }

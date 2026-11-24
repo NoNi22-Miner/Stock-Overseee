@@ -101,6 +101,11 @@ export type QueuedScan = {
   to_id: string | null;
   from_code: string | null;
   to_code: string | null;
+  /**
+   * Note on the movement. When the grade is not the team's standard grade this is the remark:
+   * it is stored on the movement, and the first one is also kept on the item if that version
+   * has no remark yet (record_graded_movement / record_graded_adjustment).
+   */
   note: string;
   /** Use the version of the item with this grade (made if it does not exist yet). */
   pick_grade?: boolean;

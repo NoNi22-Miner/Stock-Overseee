@@ -1,6 +1,7 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Alert, ScrollView, Switch, View } from 'react-native';
+import { DefaultGradePicker } from '../../components/DefaultGradePicker';
 import { PlanCard } from '../../components/PlanCard';
 import { Button, Card, Chip, Field, styles, Text } from '../../components/ui';
 import {
@@ -9,11 +10,13 @@ import {
   listLocations,
   manageUser,
   renameTeam,
+  setDefaultGrade,
   setLocationActive,
   setNotifyChanges,
 } from '../../lib/api';
 import { useAuth, useRole } from '../../lib/auth';
 import { useQueue } from '../../lib/offline';
+import { useRecognition } from '../../lib/recognition';
 import { can, ROLE_LABEL } from '../../lib/roles';
 import { supabase } from '../../lib/supabase';
 import { colors, fs } from '../../lib/theme';
@@ -32,6 +35,7 @@ export default function MoreScreen() {
   const role = useRole();
   const manage = can.manageLocations(role);
   const isLeader = can.manageUsers(role);
+  const recognition = useRecognition();
 
   const [team, setTeam] = useState<Team | null>(null);
   const [teamName, setTeamName] = useState('');
@@ -140,6 +144,19 @@ export default function MoreScreen() {
             onPress={() => router.push('/branding')}
           />
         )}
+        <DefaultGradePicker
+          terms={recognition.data.terms}
+          configuredId={recognition.data.defaultGradeId}
+          disabled={!can.manageProducts(role)}
+          onPick={async (gradeId) => {
+            try {
+              await setDefaultGrade(gradeId);
+              await recognition.reload();
+            } catch (e) {
+              Alert.alert('Could not save the standard grade', (e as Error).message);
+            }
+          }}
+        />
       </Card>
 
       <Text style={[styles.title, { marginTop: 12 }]}>Locations</Text>

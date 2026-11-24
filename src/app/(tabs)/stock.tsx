@@ -18,7 +18,7 @@ type Group = {
   unit: string;
   qty: number;
   low: boolean;
-  versions: { row: StockRow; grade: string | null }[];
+  versions: { row: StockRow; grade: string | null; note: string | null }[];
 };
 
 export default function StockScreen() {
@@ -72,10 +72,17 @@ export default function StockScreen() {
       const key = p ? familyKey(p) : `id:${row.product_id}`;
       let g = map.get(key);
       if (!g) {
-        g = { key, name: p ? familyName(p, dict) : row.product_name, unit: row.unit, qty: 0, low: false, versions: [] };
+        g = {
+          key,
+          name: p ? familyName(p, dict) : row.product_name,
+          unit: row.unit,
+          qty: 0,
+          low: false,
+          versions: [],
+        };
         map.set(key, g);
       }
-      g.versions.push({ row, grade: p?.grade_id ?? null });
+      g.versions.push({ row, grade: p?.grade_id ?? null, note: p?.grade_note?.trim() || null });
       g.qty += row.qty;
       g.low ||= row.is_low;
     }
@@ -139,7 +146,7 @@ export default function StockScreen() {
         }
         renderItem={({ item }) =>
           item.versions.length === 1 ? (
-            <OneItem row={item.versions[0].row} />
+            <OneItem row={item.versions[0].row} note={item.versions[0].note} />
           ) : (
             <Pressable
               onPress={() => {
@@ -179,6 +186,13 @@ export default function StockScreen() {
                     </View>
                   ))}
                 </View>
+                {item.versions
+                  .filter((v) => v.note)
+                  .map((v) => (
+                    <Text key={v.row.product_id} style={styles.muted}>
+                      {gradeShort(v.grade, dict)}: {v.note}
+                    </Text>
+                  ))}
                 {item.low && <Text style={{ color: colors.warn, fontWeight: '700' }}>Low stock</Text>}
               </View>
               <Text style={{ fontSize: fs(22), fontWeight: '800', color: item.low ? colors.warn : colors.text }}>
@@ -194,7 +208,7 @@ export default function StockScreen() {
 }
 
 /** An item with one version: as before (name, code, min stock). */
-function OneItem({ row }: { row: StockRow }) {
+function OneItem({ row, note }: { row: StockRow; note: string | null }) {
   return (
     <Pressable
       onPress={() => router.push(`/product/${row.product_id}`)}
@@ -210,6 +224,7 @@ function OneItem({ row }: { row: StockRow }) {
           {row.barcode}
           {row.min_stock > 0 ? `  ·  min ${formatQty(row.min_stock)}` : ''}
         </Text>
+        {note && <Text style={styles.muted}>Remark: {note}</Text>}
         {row.is_low && <Text style={{ color: colors.warn, fontWeight: '700' }}>Low stock</Text>}
       </View>
       <Text style={{ fontSize: fs(22), fontWeight: '800', color: row.is_low ? colors.warn : colors.text }}>

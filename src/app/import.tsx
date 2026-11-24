@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Alert, FlatList, Platform, View } from 'react-native';
 import { Button, Card, Chip, styles, Text } from '../components/ui';
 import { importItems, listProducts } from '../lib/api';
+import { defaultGradeTerm } from '../lib/grades';
 import { checkImport, TEMPLATE_EXAMPLE, TEMPLATE_HEADER, type ImportCheck, type ImportStatus } from '../lib/itemImport';
 import { cached, cacheSet, useOnline } from '../lib/offline';
 import { useRecognition } from '../lib/recognition';
@@ -28,7 +29,8 @@ async function fileBytes(asset: DocumentPicker.DocumentPickerAsset): Promise<Uin
 /** Team Leader / Oversee: add many items at once from an Excel file. */
 export default function ImportScreen() {
   const online = useOnline();
-  const { dict, reload } = useRecognition();
+  const { dict, data, reload } = useRecognition();
+  const standardName = defaultGradeTerm(data.terms, data.defaultGradeId)?.name ?? null;
   const [products, setProducts] = useState<Product[]>([]);
   const [fileName, setFileName] = useState<string | null>(null);
   const [sheet, setSheet] = useState<string[][] | null>(null);
@@ -43,8 +45,8 @@ export default function ImportScreen() {
   }, []);
 
   const check: ImportCheck | null = useMemo(
-    () => (sheet ? checkImport(sheet, dict, products) : null),
-    [sheet, dict, products],
+    () => (sheet ? checkImport(sheet, dict, products, standardName) : null),
+    [sheet, dict, products, standardName],
   );
   const counts = useMemo(() => {
     const c: Record<ImportStatus, number> = { new: 0, exists: 0, repeat: 0, problem: 0 };

@@ -3,6 +3,7 @@
 //  - plain names, one per row (like the DO system's item list): split with the Recognition Table
 //  - the template: Category · Grade · Label 1-3 · Size 1-5 · Brand · Mark · Unit · Min stock · Code
 import type { ImportItem } from './api';
+import { importGradeName } from './grades';
 import {
   applySizeDefaults,
   cleanText,
@@ -12,6 +13,7 @@ import {
   splitName,
   UNITS,
   type Dictionary,
+  type Parts,
 } from './recognize';
 import type { Product, TermKind } from './types';
 
@@ -74,7 +76,33 @@ const NAME_HEADERS = ['name', 'item', 'item name', 'nama', 'nama barang', 'baran
 
 const unitOf = (text: string) => UNITS.find((u) => u.toUpperCase() === cleanText(text)) ?? null;
 
-export function checkImport(sheet: string[][], dict: Dictionary, products: Product[]): ImportCheck {
+const idsOf = (names: string[], kind: TermKind, dict: Dictionary) =>
+  names.map((n) => findTerm(dict, kind, n)?.id).filter((id): id is string => !!id);
+
+/** Parts used only to see which recognition entry assigns a grade. */
+function partsForGrade(
+  dict: Dictionary,
+  input: { categoryId: string | null; labels: string[]; brand: string | null; marks: string[] },
+): Parts {
+  return {
+    categoryId: input.categoryId,
+    gradeId: null,
+    labelIds: idsOf(input.labels, 'label', dict),
+    brandId: input.brand ? (findTerm(dict, 'brand', input.brand)?.id ?? null) : null,
+    markIds: idsOf(input.marks, 'mark', dict),
+    size: [],
+    unknown: [],
+    extraBrands: [],
+    sizeDoubt: false,
+  };
+}
+
+export function checkImport(
+  sheet: string[][],
+  dict: Dictionary,
+  products: Product[],
+  standardGrade: string | null = null,
+): ImportCheck {
   const rows = sheet.map((r) => r.map((c) => (c ?? '').toString().trim()));
   const firstIdx = rows.findIndex((r) => r.some(Boolean));
   const header = (rows[firstIdx] ?? []).map((c) => c.toLowerCase());
@@ -140,23 +168,31 @@ export function checkImport(sheet: string[][], dict: Dictionary, products: Produ
         });
       }
       const min = Number(get(r, idx.min).replace(',', '.') || 0);
+      const labels = idx.labels
+        .map((c) => canon('label', get(r, c), 'Label'))
+        .filter(Boolean)
+        .slice(0, 3);
+      const marks = get(r, idx.mark)
+        .split(/[\s,]+/)
+        .filter(Boolean)
+        .map((m) => canon('mark', m, 'Mark'))
+        .slice(0, 3);
+      const brand = canon('brand', get(r, idx.brand), 'Brand') || null;
       const item: ImportItem = {
         category: cat?.name ?? catText,
-        grade: canon('grade', get(r, idx.grade), 'Grade') || null,
-        labels: idx.labels
-          .map((c) => canon('label', get(r, c), 'Label'))
-          .filter(Boolean)
-          .slice(0, 3),
+        grade: importGradeName(
+          dict,
+          partsForGrade(dict, { categoryId: cat?.id ?? null, labels, brand, marks }),
+          standardGrade,
+          canon('grade', get(r, idx.grade), 'Grade'),
+        ),
+        labels,
         size: idx.size
           .map((c) => get(r, c))
           .filter(Boolean)
           .slice(0, 5),
-        brand: canon('brand', get(r, idx.brand), 'Brand') || null,
-        marks: get(r, idx.mark)
-          .split(/[\s,]+/)
-          .filter(Boolean)
-          .map((m) => canon('mark', m, 'Mark'))
-          .slice(0, 3),
+        brand,
+        marks,
         unit,
         min_stock: Number.isFinite(min) && min > 0 ? min : 0,
         barcode: get(r, idx.code) || null,
@@ -185,7 +221,7 @@ export function checkImport(sheet: string[][], dict: Dictionary, products: Produ
     const term = (id: string | null) => (id ? (dict.termById.get(id)?.name ?? '') : '');
     const item: ImportItem = {
       category: cat.name,
-      grade: term(parts.gradeId) || null,
+      grade: importGradeName(dict, parts, standardGrade),
       labels: parts.labelIds.map(term),
       size: applySizeDefaults(parts.size, cat.size_pattern),
       brand: term(parts.brandId) || null,
