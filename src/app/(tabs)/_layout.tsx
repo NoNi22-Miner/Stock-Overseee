@@ -15,7 +15,7 @@ import { Text } from '../../components/ui';
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
 /** Menu icon size before the person's own icon scale (More → Text & icon size). */
-const ICON = 20;
+const ICON = 16;
 
 const iconSize = () => is(layout.nav === 'bottom' ? ICON + 2 : ICON);
 

@@ -32,9 +32,7 @@ export function TransferCard({ t }: { t: Transfer }) {
       ]}
     >
       <View style={styles.row}>
-        <Text style={[styles.title, { flex: 1 }]} numberOfLines={1}>
-          {t.product_name}
-        </Text>
+        <Text style={[styles.title, { flex: 1, minWidth: 0 }]}>{t.product_name}</Text>
         <View
           style={{ borderRadius: 999, borderWidth: 1.5, borderColor: color, paddingHorizontal: 10, paddingVertical: 2 }}
         >

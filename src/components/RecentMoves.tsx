@@ -61,11 +61,9 @@ export function RecentMoves({
 
       {queued.map((q) => (
         <View key={q.client_id} style={[styles.card, rowStyle, { borderLeftColor: colors.muted, opacity: 0.8 }]}>
-          <View style={{ flex: 1, gap: 2 }}>
+          <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
             <Text style={{ color: kindColor[q.kind], fontWeight: '800', fontSize: fs(12) }}>{queuedLabel(q)}</Text>
-            <Text style={styles.title} numberOfLines={1}>
-              {q.product_name}
-            </Text>
+            <Text style={styles.title}>{q.product_name}</Text>
             <Text style={styles.muted}>
               {q.status === 'failed' ? `Not synced: ${q.error}` : 'Waiting to sync'} · {timeAgo(q.scanned_at)}
             </Text>
@@ -97,19 +95,18 @@ export function RecentMoves({
               pressed && { opacity: 0.6 },
             ]}
           >
-            <View style={{ flex: 1, gap: 2 }}>
+            <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
               <Text style={{ color: kindColor[m.kind], fontWeight: '800', fontSize: fs(12) }}>{describeMove(m)}</Text>
-              <Text style={styles.title} numberOfLines={1}>
-                {m.product_name}
-              </Text>
-              <Text style={styles.muted} numberOfLines={m.note ? 2 : 1}>
+              <Text style={styles.title}>{m.product_name}</Text>
+              <Text style={styles.muted}>
                 {timeAgo(m.scanned_at ?? m.created_at)}
                 {m.actor_name ? ` · ${m.actor_name}` : ''}
                 {m.note ? `\nNote: ${m.note}` : ''}
               </Text>
             </View>
             <Text style={qtyStyle}>
-              {m.kind === 'ADJUST' && m.qty_after != null ? `= ${formatQty(m.qty_after)}` : formatQty(m.qty)}{' '}
+              {m.kind === 'ADJUST' && m.qty_after != null ? `= ${formatQty(m.qty_after)}` : formatQty(m.qty)}
+              {'\n'}
               <Text style={styles.muted}>{m.unit}</Text>
             </Text>
             {repeatable && (
@@ -120,7 +117,7 @@ export function RecentMoves({
                 accessibilityLabel={`Repeat: ${describeMove(m)} ${formatQty(m.qty)} ${m.unit} ${m.product_name}`}
                 style={({ pressed }) => [repeatBtn, pressed && { opacity: 0.6 }]}
               >
-                <Text style={{ color: colors.primary, fontWeight: '800', fontSize: fs(18) }}>↻</Text>
+                <Text style={{ color: colors.primary, fontWeight: '800', fontSize: fs(14) }}>↻</Text>
               </Pressable>
             )}
           </Pressable>
@@ -130,12 +127,24 @@ export function RecentMoves({
   );
 }
 
-const rowStyle = { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, borderLeftWidth: 5 };
-const qtyStyle = themed(() => ({ color: colors.text, fontWeight: '800' as const, fontSize: fs(16) }));
+const rowStyle = {
+  flexDirection: 'row' as const,
+  alignItems: 'flex-start' as const,
+  gap: 8,
+  borderLeftWidth: 4,
+};
+const qtyStyle = themed(() => ({
+  color: colors.text,
+  fontWeight: '800' as const,
+  fontSize: fs(13),
+  textAlign: 'right' as const,
+  flexShrink: 0,
+  maxWidth: 72,
+}));
 const repeatBtn = themed(() => ({
-  width: 40,
-  height: 40,
-  borderRadius: 20,
+  width: 28,
+  height: 28,
+  borderRadius: 14,
   borderWidth: 1.5,
   borderColor: colors.primary,
   alignItems: 'center' as const,

@@ -202,16 +202,36 @@ export function homeSections(saved: HomeSection[] | undefined): HomeSection[] {
 // Text and icon size: each person's own choice on their phone (More → Text & icon size) -----------
 
 export const SIZE_STEPS = [
-  { key: 'small', label: 'Small', scale: 0.9 },
+  { key: 'tiny', label: 'Tiny', scale: 0.8 },
+  { key: 'smaller', label: 'Smaller', scale: 0.9 },
   { key: 'normal', label: 'Normal', scale: 1 },
-  { key: 'large', label: 'Large', scale: 1.15 },
-  { key: 'xlarge', label: 'Extra large', scale: 1.3 },
+  { key: 'bigger', label: 'Bigger', scale: 1.15 },
+  { key: 'enormous', label: 'Enormous', scale: 1.35 },
 ] as const;
 export type SizeStep = (typeof SIZE_STEPS)[number]['key'];
-export type DisplayPrefs = { text: SizeStep; icons: SizeStep };
-export const DEFAULT_DISPLAY: DisplayPrefs = { text: 'normal', icons: 'normal' };
+/** Text size only. Icons stay small so a long item name still fits beside them. */
+export type DisplayPrefs = { text: SizeStep };
+export const DEFAULT_DISPLAY: DisplayPrefs = { text: 'normal' };
+
+const LEGACY_SIZE: Record<string, SizeStep> = { small: 'smaller', large: 'bigger', xlarge: 'enormous' };
+
+export function normalizeSize(step: string | null | undefined): SizeStep {
+  if (step && SIZE_STEPS.some((s) => s.key === step)) return step as SizeStep;
+  if (step && LEGACY_SIZE[step]) return LEGACY_SIZE[step];
+  return 'normal';
+}
+
+export function normalizeDisplay(raw: { text?: string } | null | undefined): DisplayPrefs {
+  return { text: normalizeSize(raw?.text) };
+}
 
 export const stepScale = (step: SizeStep | undefined) => SIZE_STEPS.find((s) => s.key === step)?.scale ?? 1;
+
+/** Icons grow only a little with the text size, and Enormous stays at the old normal icon size. */
+export function iconScaleFor(step: SizeStep | undefined) {
+  const text = stepScale(step);
+  return Math.round((0.78 + Math.max(0, text - 0.8) * 0.4) * 100) / 100;
+}
 
 /** The current multipliers (1 = normal). */
 export const sizing = { text: 1, icon: 1 };
@@ -252,8 +272,9 @@ export function themed<T extends object>(make: () => T): T {
 
 /** Puts a person's text / icon size into the live values. The caller then draws the app again. */
 export function applyDisplay(prefs: Partial<DisplayPrefs> | null | undefined) {
-  sizing.text = stepScale(prefs?.text);
-  sizing.icon = stepScale(prefs?.icons);
+  const text = normalizeSize(prefs?.text);
+  sizing.text = stepScale(text);
+  sizing.icon = iconScaleFor(text);
   rebuilders.forEach((b) => b());
 }
 

@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
+import { registerDevice } from './device';
 import { cacheGet, cacheSet, isNetworkError, setOfflineScope } from './offline';
 import { FREE_INFO, getPlanInfo, type PlanInfo } from './plan';
 import { registerForPush, unregisterPush, watchPushToken } from './push';
@@ -29,6 +30,9 @@ type AuthState = {
   myLocations: string[];
   /** The team's plan, limits and what is locked. */
   plan: PlanInfo;
+  /** Set when this sign-in must replace the Team Leader's bound device, or was signed out. */
+  deviceGate: null | 'replace' | 'revoked';
+  confirmReplaceDevice: () => Promise<void>;
   reloadProfile: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -40,6 +44,8 @@ const AuthContext = createContext<AuthState>({
   profileError: null,
   myLocations: [],
   plan: FREE_INFO,
+  deviceGate: null,
+  confirmReplaceDevice: async () => {},
   reloadProfile: async () => {},
   signOut: async () => {},
 });
@@ -62,6 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [myLocations, setMyLocations] = useState<string[]>([]);
   const [plan, setPlan] = useState<PlanInfo>(FREE_INFO);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [deviceGate, setDeviceGate] = useState<null | 'replace' | 'revoked'>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -127,8 +134,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     reloadProfile();
   }, [reloadProfile]);
 
-  // "Online" heartbeat while the app is open and in the foreground.
+  // Tell the team which device this sign-in is, and refresh last-seen about once a minute.
   const active = !!profile?.role && profile.is_active;
+  const confirmReplaceDevice = useCallback(async () => {
+    const result = await registerDevice(true);
+    setDeviceGate(result.ok ? null : result.code === 'revoked' ? 'revoked' : 'replace');
+  }, []);
+  useEffect(() => {
+    if (!active) {
+      setDeviceGate(null);
+      return;
+    }
+    let stop = false;
+    const run = () => {
+      registerDevice(false)
+        .then((result) => {
+          if (stop) return;
+          setDeviceGate(result.ok ? null : result.code === 'revoked' ? 'revoked' : 'replace');
+        })
+        .catch(() => {});
+    };
+    run();
+    const timer = setInterval(run, HEARTBEAT_MS);
+    return () => {
+      stop = true;
+      clearInterval(timer);
+    };
+  }, [active, userId]);
+
+  // "Online" heartbeat while the app is open and in the foreground.
   useEffect(() => {
     if (!active) return;
     let timer: ReturnType<typeof setInterval> | null = null;
@@ -171,7 +205,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ session, profile, loading, profileError, myLocations, plan, reloadProfile, signOut }}
+      value={{
+        session,
+        profile,
+        loading,
+        profileError,
+        myLocations,
+        plan,
+        deviceGate,
+        confirmReplaceDevice,
+        reloadProfile,
+        signOut,
+      }}
     >
       {children}
     </AuthContext.Provider>
