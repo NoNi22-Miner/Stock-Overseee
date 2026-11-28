@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, Fragment, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { getTeamBrand } from './api';
 import { useAuth } from './auth';
-import { applyDisplay, applyTheme, DEFAULT_DISPLAY, type DisplayPrefs, type TeamTheme } from './theme';
+import { applyDisplay, applyTheme, DEFAULT_DISPLAY, normalizeDisplay, type DisplayPrefs, type TeamTheme } from './theme';
 
 export type Brand = { teamId: string | null; companyName: string | null; theme: TeamTheme };
 
@@ -63,7 +63,7 @@ export function BrandProvider({ children }: { children: ReactNode }) {
 
   /** Switch to these sizes (drawing the app again if they differ from the ones in use). */
   const showDisplay = useCallback((prefs: DisplayPrefs, returnTo?: string) => {
-    const next: DisplayPrefs = { text: prefs.text ?? 'normal', icons: prefs.icons ?? 'normal' };
+    const next = normalizeDisplay(prefs);
     const json = JSON.stringify(next);
     if (json === displayJson.current) return;
     displayJson.current = json;
@@ -91,7 +91,7 @@ export function BrandProvider({ children }: { children: ReactNode }) {
       .then(([raw, rawDisplay]) => {
         if (rawDisplay) {
           storedDisplay.current = JSON.parse(rawDisplay) as StoredDisplay;
-          const last = { ...DEFAULT_DISPLAY, ...storedDisplay.current.last };
+          const last = normalizeDisplay(storedDisplay.current.last);
           displayJson.current = JSON.stringify(last);
           applyDisplay(last);
           setDisplayState(last);
@@ -110,7 +110,7 @@ export function BrandProvider({ children }: { children: ReactNode }) {
   // Each account has its own sizes on a shared phone (a new account starts at Normal).
   useEffect(() => {
     if (!ready || !userId) return;
-    const mine = { ...DEFAULT_DISPLAY, ...storedDisplay.current.users?.[userId] };
+    const mine = normalizeDisplay(storedDisplay.current.users?.[userId]);
     if (JSON.stringify(storedDisplay.current.last) !== JSON.stringify(mine)) {
       storedDisplay.current = { ...storedDisplay.current, last: mine };
       AsyncStorage.setItem(DISPLAY_KEY, JSON.stringify(storedDisplay.current)).catch(() => {});

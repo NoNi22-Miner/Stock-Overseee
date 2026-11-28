@@ -32,6 +32,7 @@ import {
 import { cached, submitScan, useOnline, useQueue, type QueuedScan } from '../../lib/offline';
 import { useRecognition } from '../../lib/recognition';
 import { allowsDecimals, isSure, rankItems, splitName, type ItemMatch } from '../../lib/recognize';
+import { identifyScanItems, type ScanHit } from '../../lib/scanItems';
 import { can } from '../../lib/roles';
 import { colors, fs, kindColor } from '../../lib/theme';
 import { timeAgo } from '../../lib/time';
@@ -72,6 +73,8 @@ export default function ScanScreen() {
   const [lookedUp, setLookedUp] = useState<string | null>(null);
   const [readText, setReadText] = useState<string | null>(null);
   const [matches, setMatches] = useState<ItemMatch[]>([]);
+  /** Up to five items read from one scan, in order, each with its own grade. */
+  const [scanHits, setScanHits] = useState<ScanHit[]>([]);
   /** The match list came from text, and the user had to pick: remember the pick for that text. */
   const [pickFor, setPickFor] = useState<string | null>(null);
   const [picker, setPicker] = useState(false);
@@ -221,31 +224,37 @@ export default function ScanScreen() {
     if (product && mode === 'ADJUST') setQty(formatQty(versionStock(product, g, fromId)));
   }
 
-  /** Exact barcode / code first; then items whose parts match (or learned spellings). */
+  /** Exact barcode / code first; then up to five items, each line graded on its own. */
   function findText(blocks: string[], list: Product[] = products) {
     const text = blocks.join(' ').trim();
     if (!text) return;
     setMessage(null);
     setLookedUp(text);
     setPicker(false);
-    const exact = list.find((p) => p.barcode.trim().toLowerCase() === text.toLowerCase());
-    // Grade versions of one item count as one match (the best-fitting version); the grade is picked after.
+    const hits = identifyScanItems(blocks, list, recognition.dict, recognition.learned);
+    setScanHits(hits);
+    const parts = splitName(text, recognition.dict, true);
+    setReadGrade(parts.gradeId);
+    setNameGrade(hits[0]?.gradeId ?? mappedGradeId(parts, recognition.dict));
     const seen = new Set<string>();
-    const found = exact
-      ? [{ product: exact, score: 1 }]
+    const found = hits.length
+      ? hits.map((h) => ({ product: h.product, score: h.score, learned: h.learned }))
       : rankItems(blocks, list, recognition.dict, recognition.learned, 12)
           .filter((m) => !seen.has(familyKey(m.product)) && !!seen.add(familyKey(m.product)))
-          .slice(0, 6);
-    const parts = exact ? null : splitName(text, recognition.dict, true);
-    const mapped = parts ? mappedGradeId(parts, recognition.dict) : null;
-    setReadGrade(parts?.gradeId ?? null);
-    setNameGrade(mapped);
+          .slice(0, 5);
     setMatches(found);
-    if (exact || isSure(found)) {
+    if (hits.length === 1) {
+      choose(hits[0].product, false, hits[0].gradeId);
+    } else if (hits.length > 1) {
+      setProduct(null);
+      setPickFor(text);
+      unknownCode.current = null;
+    } else if (isSure(found)) {
+      const mapped = mappedGradeId(parts, recognition.dict);
       choose(found[0].product, false, mapped);
     } else {
       setProduct(null);
-      setPickFor(text);
+      setPickFor(found.length ? text : null);
       unknownCode.current = found.length ? null : text;
     }
   }
@@ -258,6 +267,7 @@ export default function ScanScreen() {
     setLookedUp(null);
     setReadText(null);
     setMatches([]);
+    setScanHits([]);
     setProduct(null);
     setGradeId(null);
     setReadGrade(null);
@@ -606,10 +616,30 @@ export default function ScanScreen() {
           </Card>
         )}
 
-        {readText && (
-          <Text style={styles.muted} numberOfLines={3}>
-            Read from label: “{readText}”
-          </Text>
+        {readText && <Text style={styles.muted}>Read from label: “{readText}”</Text>}
+
+        {scanHits.length > 0 && (
+          <Card style={{ gap: 8 }}>
+            <Text style={styles.title}>
+              {scanHits.length === 1 ? '1 item' : `${scanHits.length} items`}
+            </Text>
+            <Text style={styles.muted}>Tap a number to use that item. Each line keeps its own grade.</Text>
+            {scanHits.map((h, i) => (
+              <Pressable
+                key={`${h.product.id}-${i}`}
+                onPress={() => choose(h.product, true, h.gradeId)}
+                style={({ pressed }) => [{ gap: 2 }, pressed && { opacity: 0.6 }]}
+              >
+                <Text style={{ color: colors.text, fontWeight: '800' }}>
+                  {i + 1}. {h.product.name}
+                </Text>
+                <Text style={styles.muted}>
+                  {h.product.structured ? `Grade ${gradeName(h.gradeId, recognition.dict)} · ` : ''}
+                  {Math.round(h.score * 100)}%
+                </Text>
+              </Pressable>
+            ))}
+          </Card>
         )}
 
         {/* Find an item by tapping: Category → Grade → Label → Size → Brand */}
@@ -626,7 +656,7 @@ export default function ScanScreen() {
         )}
 
         {/* No clear match: let the user pick from the possible items */}
-        {lookedUp && !product && !picker && matches.length > 0 && (
+        {lookedUp && !product && !picker && scanHits.length === 0 && matches.length > 0 && (
           <Card style={{ gap: 8 }}>
             <Text style={styles.title}>Which item is it?</Text>
             <Text style={styles.muted}>Possible items for “{lookedUp}”, best first</Text>

@@ -219,7 +219,10 @@ export default function MoreScreen() {
             : 'Signs in with email'}
           {role ? `  ·  ${ROLE_LABEL[role]}` : ''}
         </Text>
-        <Button title="Text & icon size" variant="outline" onPress={() => router.push('/display')} />
+        <Button title="Text size" variant="outline" onPress={() => router.push('/display')} />
+        {can.manageUsers(role) && (
+          <Button title="Device Controller" variant="outline" onPress={() => router.push('/devices')} />
+        )}
         <Button
           title="Sign out"
           variant="outline"

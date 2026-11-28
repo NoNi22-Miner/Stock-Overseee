@@ -190,9 +190,7 @@ export default function HomeScreen() {
             {moved.map((x) => (
               <Card key={x.product.id} style={{ width: itemCardWidth ?? '100%', gap: 4 }}>
                 <Pressable onPress={() => router.push(`/product/${x.product.id}`)}>
-                  <Text style={styles.title} numberOfLines={1}>
-                    {x.product.name}
-                  </Text>
+                  <Text style={styles.title}>{x.product.name}</Text>
                   <Text style={styles.muted}>
                     {formatTotal(metricValue(x.total, metric), unitOf(x.product.unit))} this month
                   </Text>

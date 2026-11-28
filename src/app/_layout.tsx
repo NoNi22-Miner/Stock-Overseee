@@ -3,6 +3,7 @@ import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider } from 'expo-rout
 import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, Platform, View } from 'react-native';
+import { ReplaceDeviceGate, RevokedDeviceGate } from '../components/DeviceGate';
 import { AuthProvider, useAuth } from '../lib/auth';
 import { BrandProvider, takePendingRoute } from '../lib/brand';
 import { routeForNotification } from '../lib/push';
@@ -21,7 +22,7 @@ function NotificationTaps({ ready }: { ready: boolean }) {
 }
 
 function RootStack() {
-  const { session, profile, loading } = useAuth();
+  const { session, profile, loading, deviceGate, confirmReplaceDevice, signOut } = useAuth();
 
   // After the look changed, open again the screen that changed it (the app was redrawn).
   useEffect(() => {
@@ -68,7 +69,8 @@ function RootStack() {
           <Stack.Screen name="transfer/[id]" options={{ title: 'Transfer' }} />
           <Stack.Screen name="queue" options={{ title: 'Waiting to sync' }} />
           <Stack.Screen name="branding" options={{ title: 'Theme & layout' }} />
-          <Stack.Screen name="display" options={{ title: 'Text & icon size' }} />
+          <Stack.Screen name="display" options={{ title: 'Text size' }} />
+          <Stack.Screen name="devices" options={{ title: 'Device Controller' }} />
           <Stack.Screen name="plans" options={{ title: 'Plans' }} />
           <Stack.Screen name="requests" options={{ title: 'Feature requests' }} />
           <Stack.Screen name="developer" options={{ title: 'Developer' }} />
@@ -84,6 +86,16 @@ function RootStack() {
           <Stack.Screen name="signup" options={{ headerShown: false }} />
         </Stack.Protected>
       </Stack>
+      {hasAccess && deviceGate === 'replace' && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+          <ReplaceDeviceGate onReplace={confirmReplaceDevice} onSignOut={signOut} />
+        </View>
+      )}
+      {hasAccess && deviceGate === 'revoked' && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+          <RevokedDeviceGate onSignOut={signOut} />
+        </View>
+      )}
     </>
   );
 }
